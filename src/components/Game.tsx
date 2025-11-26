@@ -1046,10 +1046,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   const [lastPlacedTile, setLastPlacedTile] = useState<{ x: number; y: number } | null>(null);
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
+  const [dragStartTile, setDragStartTile] = useState<{ x: number; y: number } | null>(null);
+  const [dragEndTile, setDragEndTile] = useState<{ x: number; y: number } | null>(null);
   
   const { grid, gridSize, selectedTool } = state;
   
-  const supportsDrag = ['road', 'bulldoze', 'zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'].includes(selectedTool);
+  const supportsDrag = ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'].includes(selectedTool);
   
   // Load all building images on mount
   useEffect(() => {
@@ -1133,8 +1135,15 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         const isHovered = hoveredTile?.x === x && hoveredTile?.y === y;
         const isSelected = selectedTile?.x === x && selectedTile?.y === y;
         
+        // Check if tile is in drag selection rectangle
+        const isInDragRect = dragStartTile && dragEndTile && 
+          x >= Math.min(dragStartTile.x, dragEndTile.x) &&
+          x <= Math.max(dragStartTile.x, dragEndTile.x) &&
+          y >= Math.min(dragStartTile.y, dragEndTile.y) &&
+          y <= Math.max(dragStartTile.y, dragEndTile.y);
+        
         // Draw base tile
-        drawIsometricTile(ctx, screenX, screenY, tile, isHovered || isSelected);
+        drawIsometricTile(ctx, screenX, screenY, tile, isHovered || isSelected || isInDragRect);
         
         // Draw building if present
         if (tile.building.type !== 'grass' && tile.building.type !== 'empty') {
@@ -1157,7 +1166,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     }
     
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize]);
+  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize, dragStartTile, dragEndTile]);
   
   // Draw isometric tile base
   function drawIsometricTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, highlight: boolean) {
@@ -1261,11 +1270,137 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     }
   }
   
+  // Helper function to check if a tile has a road
+  function hasRoad(gridX: number, gridY: number): boolean {
+    if (gridX < 0 || gridX >= gridSize || gridY < 0 || gridY >= gridSize) return false;
+    return grid[gridY][gridX].building.type === 'road';
+  }
+  
+  // Draw road with proper adjacency and markings
+  function drawRoad(ctx: CanvasRenderingContext2D, x: number, y: number, gridX: number, gridY: number) {
+    const w = TILE_WIDTH;
+    const h = TILE_HEIGHT;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    
+    // Check adjacency (in isometric coordinates)
+    const north = hasRoad(gridX - 1, gridY);  // top-left edge
+    const east = hasRoad(gridX, gridY - 1);   // top-right edge
+    const south = hasRoad(gridX + 1, gridY);  // bottom-right edge
+    const west = hasRoad(gridX, gridY + 1);   // bottom-left edge
+    
+    // Road width
+    const roadW = w * 0.15;
+    const roadH = h * 0.15;
+    
+    // Draw road segments to connected edges
+    ctx.fillStyle = '#4a4a4a';
+    
+    // North segment (to top-left)
+    if (north) {
+      ctx.beginPath();
+      ctx.moveTo(cx - roadW * 0.7, cy - roadH * 0.7);
+      ctx.lineTo(x + w * 0.25 - roadW * 0.5, y + h * 0.25 - roadH * 0.5);
+      ctx.lineTo(x + w * 0.25 + roadW * 0.5, y + h * 0.25 + roadH * 0.5);
+      ctx.lineTo(cx + roadW * 0.7, cy + roadH * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // East segment (to top-right)
+    if (east) {
+      ctx.beginPath();
+      ctx.moveTo(cx + roadW * 0.7, cy - roadH * 0.7);
+      ctx.lineTo(x + w * 0.75 + roadW * 0.5, y + h * 0.25 - roadH * 0.5);
+      ctx.lineTo(x + w * 0.75 - roadW * 0.5, y + h * 0.25 + roadH * 0.5);
+      ctx.lineTo(cx - roadW * 0.7, cy + roadH * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // South segment (to bottom-right)
+    if (south) {
+      ctx.beginPath();
+      ctx.moveTo(cx + roadW * 0.7, cy + roadH * 0.7);
+      ctx.lineTo(x + w * 0.75 + roadW * 0.5, y + h * 0.75 + roadH * 0.5);
+      ctx.lineTo(x + w * 0.75 - roadW * 0.5, y + h * 0.75 - roadH * 0.5);
+      ctx.lineTo(cx - roadW * 0.7, cy - roadH * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // West segment (to bottom-left)
+    if (west) {
+      ctx.beginPath();
+      ctx.moveTo(cx - roadW * 0.7, cy + roadH * 0.7);
+      ctx.lineTo(x + w * 0.25 - roadW * 0.5, y + h * 0.75 + roadH * 0.5);
+      ctx.lineTo(x + w * 0.25 + roadW * 0.5, y + h * 0.75 - roadH * 0.5);
+      ctx.lineTo(cx + roadW * 0.7, cy - roadH * 0.7);
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Center intersection (always drawn)
+    const centerSize = roadW * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - centerSize);
+    ctx.lineTo(cx + centerSize, cy);
+    ctx.lineTo(cx, cy + centerSize);
+    ctx.lineTo(cx - centerSize, cy);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw road markings (yellow dashed lines)
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    
+    // North marking (toward top-left)
+    if (north) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy - 3);
+      ctx.lineTo(x + w * 0.25 - 3, y + h * 0.25 - 3);
+      ctx.stroke();
+    }
+    
+    // East marking (toward top-right)
+    if (east) {
+      ctx.beginPath();
+      ctx.moveTo(cx + 3, cy - 3);
+      ctx.lineTo(x + w * 0.75 + 3, y + h * 0.25 - 3);
+      ctx.stroke();
+    }
+    
+    // South marking (toward bottom-right)
+    if (south) {
+      ctx.beginPath();
+      ctx.moveTo(cx + 3, cy + 3);
+      ctx.lineTo(x + w * 0.75 + 3, y + h * 0.75 + 3);
+      ctx.stroke();
+    }
+    
+    // West marking (toward bottom-left)
+    if (west) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy + 3);
+      ctx.lineTo(x + w * 0.25 - 3, y + h * 0.75 + 3);
+      ctx.stroke();
+    }
+    
+    ctx.setLineDash([]);
+  }
+  
   // Draw building sprite
   function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile) {
     const buildingType = tile.building.type;
     const w = TILE_WIDTH;
     const h = TILE_HEIGHT;
+    
+    // Handle roads separately with adjacency
+    if (buildingType === 'road') {
+      drawRoad(ctx, x, y, tile.x, tile.y);
+      return;
+    }
     
     // Map building types to images
     let imageSrc: string | null = null;
@@ -1305,18 +1440,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         Math.round(imgSize),
         Math.round(imgSize)
       );
-    } else if (buildingType === 'road') {
-      // Roads are handled in tile drawing, but draw road markings here
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy);
-      ctx.lineTo(cx + 5, cy);
-      ctx.stroke();
-      ctx.setLineDash([]);
     }
     
     // Draw fire effect
@@ -1362,12 +1485,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
           if (selectedTool === 'select') {
             setSelectedTile({ x: gridX, y: gridY });
+          } else if (supportsDrag) {
+            // Start drag rectangle selection
+            setDragStartTile({ x: gridX, y: gridY });
+            setDragEndTile({ x: gridX, y: gridY });
+            setIsDragging(true);
           } else {
+            // Single placement for non-drag tools
             placeAtTile(gridX, gridY);
-            setLastPlacedTile({ x: gridX, y: gridY });
-            if (supportsDrag) {
-              setIsDragging(true);
-            }
           }
         }
       }
@@ -1392,21 +1517,38 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
         setHoveredTile({ x: gridX, y: gridY });
         
-        if (isDragging && supportsDrag && (lastPlacedTile?.x !== gridX || lastPlacedTile?.y !== gridY)) {
-          placeAtTile(gridX, gridY);
-          setLastPlacedTile({ x: gridX, y: gridY });
+        // Update drag rectangle end point
+        if (isDragging && supportsDrag && dragStartTile) {
+          setDragEndTile({ x: gridX, y: gridY });
         }
       } else {
         setHoveredTile(null);
       }
     }
-  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, supportsDrag, placeAtTile, lastPlacedTile]);
+  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, supportsDrag, dragStartTile]);
   
   const handleMouseUp = useCallback(() => {
+    // Fill the drag rectangle when mouse is released
+    if (isDragging && dragStartTile && dragEndTile && supportsDrag) {
+      const minX = Math.min(dragStartTile.x, dragEndTile.x);
+      const maxX = Math.max(dragStartTile.x, dragEndTile.x);
+      const minY = Math.min(dragStartTile.y, dragEndTile.y);
+      const maxY = Math.max(dragStartTile.y, dragEndTile.y);
+      
+      // Place at all tiles in the rectangle
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          placeAtTile(x, y);
+        }
+      }
+    }
+    
     setIsPanning(false);
     setIsDragging(false);
     setLastPlacedTile(null);
-  }, []);
+    setDragStartTile(null);
+    setDragEndTile(null);
+  }, [isDragging, dragStartTile, dragEndTile, supportsDrag, placeAtTile]);
   
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -1444,9 +1586,18 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       
       {hoveredTile && selectedTool !== 'select' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card/90 border border-border px-4 py-2 rounded-md text-sm">
-          {TOOL_INFO[selectedTool].name} at ({hoveredTile.x}, {hoveredTile.y})
-          {TOOL_INFO[selectedTool].cost > 0 && ` - $${TOOL_INFO[selectedTool].cost}`}
-          {supportsDrag && ' - Drag to place multiple'}
+          {isDragging && dragStartTile && dragEndTile ? (
+            <>
+              {TOOL_INFO[selectedTool].name} - {Math.abs(dragEndTile.x - dragStartTile.x) + 1}x{Math.abs(dragEndTile.y - dragStartTile.y) + 1} area
+              {TOOL_INFO[selectedTool].cost > 0 && ` - $${TOOL_INFO[selectedTool].cost * (Math.abs(dragEndTile.x - dragStartTile.x) + 1) * (Math.abs(dragEndTile.y - dragStartTile.y) + 1)}`}
+            </>
+          ) : (
+            <>
+              {TOOL_INFO[selectedTool].name} at ({hoveredTile.x}, {hoveredTile.y})
+              {TOOL_INFO[selectedTool].cost > 0 && ` - $${TOOL_INFO[selectedTool].cost}`}
+              {supportsDrag && ' - Drag to zone area'}
+            </>
+          )}
         </div>
       )}
       

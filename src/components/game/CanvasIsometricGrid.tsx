@@ -95,6 +95,27 @@ import {
 import { drawPlaceholderBuilding } from '@/components/game/placeholders';
 import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage } from '@/components/game/imageLoader';
 import { TileInfoPanel } from '@/components/game/panels';
+import {
+  findResidentialBuildings,
+  findPedestrianDestinations,
+  findStations,
+  findFires,
+  findAirports,
+  findHeliports,
+  findMarinasAndPiers,
+  findAdjacentWaterTile,
+  findFireworkBuildings,
+  findSmogFactories,
+  isOverWater,
+  generateTourWaypoints,
+} from '@/components/game/gridFinders';
+import {
+  calculateViewportBounds,
+  isEntityBehindBuilding,
+  isInViewport,
+  setupCanvasContext,
+  clearCanvas,
+} from '@/components/game/renderHelpers';
 
 // Props interface for CanvasIsometricGrid
 export interface CanvasIsometricGridProps {
@@ -342,59 +363,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     return false;
   }, []);
 
-  // Find residential buildings for pedestrian spawning
-  const findResidentialBuildings = useCallback((): { x: number; y: number }[] => {
+  // Find residential buildings for pedestrian spawning (uses imported utility)
+  const findResidentialBuildingsCallback = useCallback((): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const residentials: { x: number; y: number }[] = [];
-    const residentialTypes: BuildingType[] = ['house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high'];
-    
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        // Include any residential building (not just populated ones)
-        if (residentialTypes.includes(currentGrid[y][x].building.type)) {
-          residentials.push({ x, y });
-        }
-      }
-    }
-    return residentials;
+    return findResidentialBuildings(currentGrid, currentGridSize);
   }, []);
 
-  // Find destinations for pedestrians (schools, commercial, industrial, parks)
-  const findPedestrianDestinations = useCallback((): { x: number; y: number; type: PedestrianDestType }[] => {
+  // Find destinations for pedestrians (uses imported utility)
+  const findPedestrianDestinationsCallback = useCallback((): { x: number; y: number; type: PedestrianDestType }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const destinations: { x: number; y: number; type: PedestrianDestType }[] = [];
-    const schoolTypes: BuildingType[] = ['school', 'university'];
-    const commercialTypes: BuildingType[] = ['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'];
-    const industrialTypes: BuildingType[] = ['factory_small', 'factory_medium', 'factory_large', 'warehouse'];
-    const parkTypes: BuildingType[] = ['park', 'park_large', 'tennis', 
-      'basketball_courts', 'playground_small', 'playground_large', 'baseball_field_small',
-      'soccer_field_small', 'football_field', 'baseball_stadium', 'community_center',
-      'swimming_pool', 'skate_park', 'mini_golf_course', 'bleachers_field', 'go_kart_track',
-      'amphitheater', 'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground',
-      'marina_docks_small', 'pier_large', 'roller_coaster_small', 'community_garden',
-      'pond_park', 'park_gate', 'mountain_lodge', 'mountain_trailhead'];
-    
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        const buildingType = currentGrid[y][x].building.type;
-        if (schoolTypes.includes(buildingType)) {
-          destinations.push({ x, y, type: 'school' });
-        } else if (commercialTypes.includes(buildingType)) {
-          // Include any commercial building
-          destinations.push({ x, y, type: 'commercial' });
-        } else if (industrialTypes.includes(buildingType)) {
-          // Include any industrial building
-          destinations.push({ x, y, type: 'industrial' });
-        } else if (parkTypes.includes(buildingType)) {
-          destinations.push({ x, y, type: 'park' });
-        }
-      }
-    }
-    return destinations;
+    return findPedestrianDestinations(currentGrid, currentGridSize);
   }, []);
 
   // Spawn a pedestrian from a residential building to a destination
@@ -402,12 +380,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) return false;
     
-    const residentials = findResidentialBuildings();
+    const residentials = findResidentialBuildingsCallback();
     if (residentials.length === 0) {
       return false;
     }
     
-    const destinations = findPedestrianDestinations();
+    const destinations = findPedestrianDestinationsCallback();
     if (destinations.length === 0) {
       return false;
     }
@@ -465,38 +443,18 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     });
     
     return true;
-  }, [findResidentialBuildings, findPedestrianDestinations]);
+  }, [findResidentialBuildingsCallback, findPedestrianDestinationsCallback]);
 
-  // Find all fire stations in the grid
-  const findStations = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
+  // Find stations (uses imported utility)
+  const findStationsCallback = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const stations: { x: number; y: number }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        if (currentGrid[y][x].building.type === type) {
-          stations.push({ x, y });
-        }
-      }
-    }
-    return stations;
+    return findStations(currentGrid, currentGridSize, type);
   }, []);
 
-  // Find all active fires in the grid
-  const findFires = useCallback((): { x: number; y: number }[] => {
+  // Find fires (uses imported utility)
+  const findFiresCallback = useCallback((): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const fires: { x: number; y: number }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        if (currentGrid[y][x].building.onFire) {
-          fires.push({ x, y });
-        }
-      }
-    }
-    return fires;
+    return findFires(currentGrid, currentGridSize);
   }, []);
 
   // Spawn new crime incidents periodically (persistent like fires)
@@ -666,8 +624,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
     
-    const fires = findFires();
-    const fireStations = findStations('fire_station');
+    const fires = findFiresCallback();
+    const fireStations = findStationsCallback('fire_station');
     
     for (const fire of fires) {
       const fireKey = `${fire.x},${fire.y}`;
@@ -694,7 +652,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
 
     // Find crimes that need police dispatched
     const crimes = findCrimeIncidents();
-    const policeStations = findStations('police_station');
+    const policeStations = findStationsCallback('police_station');
     
     // Limit police dispatches per update (increased for more action)
     let dispatched = 0;
@@ -724,7 +682,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
       }
     }
-  }, [findFires, findCrimeIncidents, findStations, dispatchEmergencyVehicle]);
+  }, [findFiresCallback, findCrimeIncidents, findStationsCallback, dispatchEmergencyVehicle]);
 
   // Update emergency vehicles movement and state
   const updateEmergencyVehicles = useCallback((delta: number) => {
@@ -1426,219 +1384,41 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
   }, [isMobile]);
 
-  // Find all airports in the city
-  const findAirports = useCallback((): { x: number; y: number }[] => {
+  // Find airports (uses imported utility)
+  const findAirportsCallback = useCallback((): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const airports: { x: number; y: number }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        if (currentGrid[y][x].building.type === 'airport') {
-          airports.push({ x, y });
-        }
-      }
-    }
-    return airports;
+    return findAirports(currentGrid, currentGridSize);
   }, []);
 
-  // Find all heliports (hospitals, airports, police stations, and non-dense malls) in the city
-  const findHeliports = useCallback((): { x: number; y: number; type: 'hospital' | 'airport' | 'police' | 'mall'; size: number }[] => {
+  // Find heliports (uses imported utility)
+  const findHeliportsCallback = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const heliports: { x: number; y: number; type: 'hospital' | 'airport' | 'police' | 'mall'; size: number }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        const buildingType = currentGrid[y][x].building.type;
-        if (buildingType === 'hospital') {
-          heliports.push({ x, y, type: 'hospital', size: 2 }); // Hospital is 2x2
-        } else if (buildingType === 'airport') {
-          heliports.push({ x, y, type: 'airport', size: 4 }); // Airport is 4x4
-        } else if (buildingType === 'police_station') {
-          heliports.push({ x, y, type: 'police', size: 1 }); // Police station is 1x1
-        } else if (buildingType === 'mall') {
-          // Only malls using the basic commercial sprite (not dense variants) can have heliports
-          // Dense variants are selected when seed < 50, so we want seed >= 50 (non-dense)
-          const seed = (x * 31 + y * 17) % 100;
-          if (seed >= 50) {
-            heliports.push({ x, y, type: 'mall', size: 3 }); // Mall is 3x3
-          }
-        }
-      }
-    }
-    return heliports;
+    return findHeliports(currentGrid, currentGridSize);
   }, []);
 
-  // Find all marinas and piers in the city (boat spawn/destination points)
-  const findMarinasAndPiers = useCallback((): { x: number; y: number; type: 'marina' | 'pier' }[] => {
+  // Find marinas and piers (uses imported utility)
+  const findMarinasAndPiersCallback = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const docks: { x: number; y: number; type: 'marina' | 'pier' }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        const buildingType = currentGrid[y][x].building.type;
-        if (buildingType === 'marina_docks_small') {
-          docks.push({ x, y, type: 'marina' });
-        } else if (buildingType === 'pier_large') {
-          docks.push({ x, y, type: 'pier' });
-        }
-      }
-    }
-    return docks;
+    return findMarinasAndPiers(currentGrid, currentGridSize);
   }, []);
 
-  // Find water tile adjacent to a marina/pier for boat positioning
-  const findAdjacentWaterTile = useCallback((dockX: number, dockY: number): { x: number; y: number } | null => {
+  // Find adjacent water tile (uses imported utility)
+  const findAdjacentWaterTileCallback = useCallback((dockX: number, dockY: number) => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return null;
-    
-    // Check adjacent tiles for water
-    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
-    for (const [dx, dy] of directions) {
-      const nx = dockX + dx;
-      const ny = dockY + dy;
-      if (nx >= 0 && nx < currentGridSize && ny >= 0 && ny < currentGridSize) {
-        if (currentGrid[ny][nx].building.type === 'water') {
-          return { x: nx, y: ny };
-        }
-      }
-    }
-    return null;
+    return findAdjacentWaterTile(currentGrid, currentGridSize, dockX, dockY);
   }, []);
 
-  // Check if a screen position is over water (for boat pathfinding)
-  // Uses inverse of gridToScreen: screenX = (x - y) * TILE_WIDTH/2, screenY = (x + y) * TILE_HEIGHT/2
-  // Solving: x = screenX/TILE_WIDTH + screenY/TILE_HEIGHT, y = screenY/TILE_HEIGHT - screenX/TILE_WIDTH
-  const screenToTile = useCallback((screenX: number, screenY: number): { tileX: number; tileY: number } => {
-    const tileX = Math.floor(screenX / TILE_WIDTH + screenY / TILE_HEIGHT);
-    const tileY = Math.floor(screenY / TILE_HEIGHT - screenX / TILE_WIDTH);
-    return { tileX, tileY };
+  // Check if screen position is over water (uses imported utility)
+  const isOverWaterCallback = useCallback((screenX: number, screenY: number): boolean => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    return isOverWater(currentGrid, currentGridSize, screenX, screenY);
   }, []);
 
-  const isOverWater = useCallback((screenX: number, screenY: number): boolean => {
+  // Generate tour waypoints (uses imported utility)
+  const generateTourWaypointsCallback = useCallback((startTileX: number, startTileY: number): TourWaypoint[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return false;
-    
-    const { tileX, tileY } = screenToTile(screenX, screenY);
-    
-    if (tileX < 0 || tileX >= currentGridSize || tileY < 0 || tileY >= currentGridSize) {
-      return false;
-    }
-    
-    return currentGrid[tileY][tileX].building.type === 'water';
-  }, [screenToTile]);
-
-  // Find all connected water tiles from a starting water tile using BFS
-  // Returns array of water tile coordinates belonging to the same body of water
-  const findConnectedWaterTiles = useCallback((startTileX: number, startTileY: number, maxTiles: number = 200): { x: number; y: number }[] => {
-    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const visited = new Set<string>();
-    const waterTiles: { x: number; y: number }[] = [];
-    const queue: { x: number; y: number }[] = [{ x: startTileX, y: startTileY }];
-    
-    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // 4-directional for cleaner water bodies
-    
-    while (queue.length > 0 && waterTiles.length < maxTiles) {
-      const { x, y } = queue.shift()!;
-      const key = `${x},${y}`;
-      
-      if (visited.has(key)) continue;
-      visited.add(key);
-      
-      if (x < 0 || x >= currentGridSize || y < 0 || y >= currentGridSize) continue;
-      if (currentGrid[y][x].building.type !== 'water') continue;
-      
-      waterTiles.push({ x, y });
-      
-      for (const [dx, dy] of directions) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!visited.has(`${nx},${ny}`)) {
-          queue.push({ x: nx, y: ny });
-        }
-      }
-    }
-    
-    return waterTiles;
+    return generateTourWaypoints(currentGrid, currentGridSize, startTileX, startTileY);
   }, []);
-
-  // Generate random tour waypoints within a body of water
-  // Creates a scenic tour route that explores the water body
-  const generateTourWaypoints = useCallback((startTileX: number, startTileY: number): TourWaypoint[] => {
-    // Find all water tiles connected to the starting point
-    const waterTiles = findConnectedWaterTiles(startTileX, startTileY);
-    
-    if (waterTiles.length < 3) return []; // Too small for a tour
-    
-    // Determine number of waypoints based on body of water size (2-6 waypoints)
-    const numWaypoints = Math.min(6, Math.max(2, Math.floor(waterTiles.length / 10)));
-    
-    // Spread waypoints across the water body
-    // We'll pick tiles that are spread out from each other
-    const waypoints: TourWaypoint[] = [];
-    const usedIndices = new Set<number>();
-    
-    // First, try to pick tiles at the edges/corners of the water body for a better tour
-    // Sort water tiles by distance from center to get outer tiles first
-    const centerX = waterTiles.reduce((sum, t) => sum + t.x, 0) / waterTiles.length;
-    const centerY = waterTiles.reduce((sum, t) => sum + t.y, 0) / waterTiles.length;
-    
-    const tilesWithDist = waterTiles.map((tile, idx) => ({
-      ...tile,
-      idx,
-      distFromCenter: Math.hypot(tile.x - centerX, tile.y - centerY)
-    }));
-    
-    // Sort by distance from center (outer tiles first), but add randomness
-    tilesWithDist.sort((a, b) => (b.distFromCenter - a.distFromCenter) + (Math.random() - 0.5) * 3);
-    
-    for (let i = 0; i < numWaypoints && i < tilesWithDist.length; i++) {
-      const tile = tilesWithDist[i];
-      
-      // Check that this waypoint is reasonably far from previous ones
-      let tooClose = false;
-      for (const wp of waypoints) {
-        const dist = Math.hypot(tile.x - wp.tileX, tile.y - wp.tileY);
-        if (dist < 3) { // Minimum distance between waypoints
-          tooClose = true;
-          break;
-        }
-      }
-      
-      if (!tooClose) {
-        const { screenX, screenY } = gridToScreen(tile.x, tile.y, 0, 0);
-        waypoints.push({
-          screenX: screenX + TILE_WIDTH / 2,
-          screenY: screenY + TILE_HEIGHT / 2,
-          tileX: tile.x,
-          tileY: tile.y
-        });
-        usedIndices.add(tile.idx);
-      }
-    }
-    
-    // If we didn't get enough waypoints, add some random ones
-    while (waypoints.length < numWaypoints && waypoints.length < waterTiles.length) {
-      const randomIdx = Math.floor(Math.random() * waterTiles.length);
-      if (!usedIndices.has(randomIdx)) {
-        const tile = waterTiles[randomIdx];
-        const { screenX, screenY } = gridToScreen(tile.x, tile.y, 0, 0);
-        waypoints.push({
-          screenX: screenX + TILE_WIDTH / 2,
-          screenY: screenY + TILE_HEIGHT / 2,
-          tileX: tile.x,
-          tileY: tile.y
-        });
-        usedIndices.add(randomIdx);
-      }
-    }
-    
-    return waypoints;
-  }, [findConnectedWaterTiles]);
 
   // Update airplanes - spawn, move, and manage lifecycle
   const updateAirplanes = useCallback((delta: number) => {
@@ -1649,7 +1429,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
 
     // Find airports and check population
-    const airports = findAirports();
+    const airports = findAirportsCallback();
     
     // Get cached population count (only recalculate when grid changes)
     const currentGridVersion = gridVersionRef.current;
@@ -1873,7 +1653,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     airplanesRef.current = updatedAirplanes;
-  }, [findAirports, isMobile]);
+  }, [findAirportsCallback, isMobile]);
 
   // Update helicopters - spawn, move between hospitals/airports, and manage lifecycle
   const updateHelicopters = useCallback((delta: number) => {
@@ -1884,7 +1664,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
 
     // Find heliports
-    const heliports = findHeliports();
+    const heliports = findHeliportsCallback();
     
     // Get cached population count
     const currentGridVersion = gridVersionRef.current;
@@ -2068,7 +1848,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     helicoptersRef.current = updatedHelicopters;
-  }, [findHeliports, isMobile]);
+  }, [findHeliportsCallback, isMobile]);
 
   // Draw airplanes with contrails
   const drawAirplanes = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -2475,7 +2255,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
 
     // Find marinas and piers
-    const docks = findMarinasAndPiers();
+    const docks = findMarinasAndPiersCallback();
     
     // No boats if no docks
     if (docks.length === 0) {
@@ -2496,10 +2276,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const homeDock = docks[Math.floor(Math.random() * docks.length)];
       
       // Find adjacent water tile for positioning
-      const waterTile = findAdjacentWaterTile(homeDock.x, homeDock.y);
+      const waterTile = findAdjacentWaterTileCallback(homeDock.x, homeDock.y);
       if (waterTile) {
         // Generate tour waypoints within the connected body of water
-        const tourWaypoints = generateTourWaypoints(waterTile.x, waterTile.y);
+        const tourWaypoints = generateTourWaypointsCallback(waterTile.x, waterTile.y);
         
         // Convert to screen coordinates
         const { screenX: originScreenX, screenY: originScreenY } = gridToScreen(waterTile.x, waterTile.y, 0, 0);
@@ -2686,9 +2466,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           // Wait at dock, then generate a new tour and depart
           if (boat.age > 3 + Math.random() * 3) {
             // Generate fresh tour waypoints for the next trip
-            const waterTile = findAdjacentWaterTile(boat.originX, boat.originY);
+            const waterTile = findAdjacentWaterTileCallback(boat.originX, boat.originY);
             if (waterTile) {
-              boat.tourWaypoints = generateTourWaypoints(waterTile.x, waterTile.y);
+              boat.tourWaypoints = generateTourWaypointsCallback(waterTile.x, waterTile.y);
               boat.tourWaypointIndex = 0;
             }
             
@@ -2717,7 +2497,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       // Check if next position is over water (skip for docked boats)
       if (boat.state !== 'docked') {
-        if (!isOverWater(nextX, nextY)) {
+        if (!isOverWaterCallback(nextX, nextY)) {
           // Next position would be on land - remove the boat
           continue;
         }
@@ -2747,7 +2527,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     boatsRef.current = updatedBoats;
-  }, [findMarinasAndPiers, findAdjacentWaterTile, isOverWater, generateTourWaypoints, isMobile]);
+  }, [findMarinasAndPiersCallback, findAdjacentWaterTileCallback, isOverWaterCallback, generateTourWaypointsCallback, isMobile]);
 
   // Draw boats with wakes
   const drawBoats = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -2907,21 +2687,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
   }, [hour]);
 
-  // Find all buildings that can have fireworks
-  const findFireworkBuildings = useCallback((): { x: number; y: number; type: BuildingType }[] => {
+  // Find firework buildings (uses imported utility)
+  const findFireworkBuildingsCallback = useCallback((): { x: number; y: number; type: BuildingType }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const buildings: { x: number; y: number; type: BuildingType }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        const buildingType = currentGrid[y][x].building.type;
-        if (FIREWORK_BUILDINGS.includes(buildingType)) {
-          buildings.push({ x, y, type: buildingType });
-        }
-      }
-    }
-    return buildings;
+    return findFireworkBuildings(currentGrid, currentGridSize, FIREWORK_BUILDINGS);
   }, []);
 
   // Update fireworks - spawn, animate, and manage lifecycle
@@ -2950,7 +2719,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (currentHour === 20 && !wasNight) {
         // Roll for firework show
         if (Math.random() < FIREWORK_SHOW_CHANCE) {
-          const fireworkBuildings = findFireworkBuildings();
+          const fireworkBuildings = findFireworkBuildingsCallback();
           if (fireworkBuildings.length > 0) {
             fireworkShowActiveRef.current = true;
             fireworkShowStartTimeRef.current = 0;
@@ -2984,7 +2753,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
 
     // Find buildings that can launch fireworks
-    const fireworkBuildings = findFireworkBuildings();
+    const fireworkBuildings = findFireworkBuildingsCallback();
     if (fireworkBuildings.length === 0) {
       fireworkShowActiveRef.current = false;
       return;
@@ -3121,7 +2890,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     fireworksRef.current = updatedFireworks;
-  }, [findFireworkBuildings, isMobile]);
+  }, [findFireworkBuildingsCallback, isMobile]);
 
   // Draw fireworks
   const drawFireworks = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -3228,26 +2997,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
   }, []);
 
-  // Find all factories that should emit smog (medium and large)
-  const findSmogFactories = useCallback((): { x: number; y: number; type: 'factory_medium' | 'factory_large' }[] => {
+  // Find smog factories (uses imported utility)
+  const findSmogFactoriesCallback = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
-    if (!currentGrid || currentGridSize <= 0) return [];
-    
-    const factories: { x: number; y: number; type: 'factory_medium' | 'factory_large' }[] = [];
-    for (let y = 0; y < currentGridSize; y++) {
-      for (let x = 0; x < currentGridSize; x++) {
-        const tile = currentGrid[y][x];
-        const buildingType = tile.building.type;
-        // Only include operating factories (powered, not abandoned, not under construction)
-        if ((buildingType === 'factory_medium' || buildingType === 'factory_large') &&
-            tile.building.powered &&
-            !tile.building.abandoned &&
-            tile.building.constructionProgress >= 100) {
-          factories.push({ x, y, type: buildingType });
-        }
-      }
-    }
-    return factories;
+    return findSmogFactories(currentGrid, currentGridSize);
   }, []);
 
   // Update smog particles - spawn new particles and update existing ones
@@ -3276,7 +3029,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     if (smogLastGridVersionRef.current !== currentGridVersion) {
       smogLastGridVersionRef.current = currentGridVersion;
       
-      const factories = findSmogFactories();
+      const factories = findSmogFactoriesCallback();
       
       // Create new smog entries for factories, preserving existing particles where possible
       const existingSmogMap = new Map<string, FactorySmog>();
@@ -3380,7 +3133,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         return true;
       });
     }
-  }, [findSmogFactories, isMobile]);
+  }, [findSmogFactoriesCallback, isMobile]);
 
   // Draw smog particles
   const drawSmog = useCallback((ctx: CanvasRenderingContext2D) => {

@@ -6,6 +6,8 @@ export * from './drawing';
 export * from './overlays';
 export * from './placeholders';
 export * from './imageLoader';
+export * from './gridFinders';
+export * from './renderHelpers';
 export { Sidebar } from './Sidebar';
 export { OverlayModeToggle } from './OverlayModeToggle';
 export { MiniMap } from './MiniMap';

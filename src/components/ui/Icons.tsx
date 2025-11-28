@@ -154,7 +154,8 @@ export function HappyIcon({ size = 18, className }: IconProps) {
 export function HealthIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
-      <path {...baseStroke} d="M12 4v16M6 10h12" />
+      <circle {...baseStroke} cx="12" cy="12" r="8.5" />
+      <path {...baseStroke} d="M12 9v6M9 12h6" />
     </svg>
   );
 }

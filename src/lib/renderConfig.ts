@@ -301,7 +301,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   denseVerticalOffsets: {
     // Dense apartment_high shifted up 0.2 tiles from -0.60
     apartment_high: -0.80, // Shifted up 0.2 tiles from -0.60
-    factory_large: -1.2, // Dense variant shifted up 0.2
+    factory_large: -1.15, // Dense variant shifted up 0.1 tiles from -1.05
   },
   denseScales: {
     // Dense apartment_high scaled down 10% total (5% more from 0.95)

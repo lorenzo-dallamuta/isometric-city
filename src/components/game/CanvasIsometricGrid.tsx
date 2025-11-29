@@ -2985,6 +2985,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               if (buildingType === 'mall') {
                 sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
               }
+              // For factory_large dense variants (row 4), shift source Y down to avoid capturing
+              // content from the row above that bleeds into the cell boundary
+              if (buildingType === 'factory_large') {
+                sourceY += tileHeight * 0.05; // Shift down ~5% to avoid row above
+                sourceH = tileHeight * 0.95; // Reduce height slightly to avoid row below clipping
+              }
               // For apartment_high dense variants, add a bit more height to avoid cutoff at bottom
               if (buildingType === 'apartment_high') {
                 sourceH = tileHeight * 1.05; // Add 5% more height at bottom

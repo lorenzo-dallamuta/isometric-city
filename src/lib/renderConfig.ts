@@ -261,8 +261,8 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // 2x2 commercial buildings
     office_low: -0.7, // Shifted up 0.2 from -0.5
     office_high: -0.7, // Shifted down 0.3 tiles from -1.0
-    // 3x3 mall needs to shift up ~1 tile
-    mall: -1.0,
+    // 3x3 mall needs to shift up ~1.5 tiles (non-dense)
+    mall: -1.5,
     // 2x2 residential apartments need shifting up
     apartment_low: -0.6,  // shifted down 0.4 from -1.0
     apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
@@ -302,6 +302,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // Dense apartment_high shifted up 0.2 tiles from -0.60
     apartment_high: -0.80, // Shifted up 0.2 tiles from -0.60
     factory_large: -1.15, // Dense variant shifted up 0.1 tiles from -1.05
+    mall: -1.0, // Dense mall stays at original position (non-dense moved to -1.5)
   },
   denseScales: {
     // Dense apartment_high scaled down 10% total (5% more from 0.95)

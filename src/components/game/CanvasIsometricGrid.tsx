@@ -2688,7 +2688,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
       });
     
-    // Draw railroad crossing signals and gates AFTER rail tiles to ensure they appear on top
+    // Draw green base tiles for grass/empty tiles adjacent to water (after rail, before crossings)
+    insertionSortByDepth(greenBaseTileQueue);
+    greenBaseTileQueue.forEach(({ tile, screenX, screenY }) => {
+      drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
+    });
+    
+    // Draw gray building base tiles (after rail, before crossings)
+    insertionSortByDepth(baseTileQueue);
+    baseTileQueue.forEach(({ tile, screenX, screenY }) => {
+      drawGreyBaseTile(ctx, screenX, screenY, tile, zoom);
+    });
+    
+    // Draw railroad crossing signals and gates AFTER base tiles to ensure they appear on top
     // We iterate through the roadQueue again since crossings are road tiles with rail overlay
     roadQueue.forEach(({ tile, screenX, screenY }) => {
       if (tile.hasRailOverlay && isRailroadCrossing(grid, gridSize, tile.x, tile.y)) {
@@ -2711,18 +2723,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           isActive
         );
       }
-    });
-    
-    // Draw green base tiles for grass/empty tiles adjacent to water (after water, before gray bases)
-    insertionSortByDepth(greenBaseTileQueue);
-    greenBaseTileQueue.forEach(({ tile, screenX, screenY }) => {
-      drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
-    });
-    
-    // Draw gray building base tiles (after water, before buildings)
-    insertionSortByDepth(baseTileQueue);
-    baseTileQueue.forEach(({ tile, screenX, screenY }) => {
-      drawGreyBaseTile(ctx, screenX, screenY, tile, zoom);
     });
     
     // Note: Beach drawing has been moved to water tiles (drawBeachOnWater)

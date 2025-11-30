@@ -223,7 +223,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     industrial: -0.5, // Shift factories down about half a tile from previous
     factory_small: -0.25, // Shift factory_small down 1/4 tile (relative to others)
     factory_medium: -0.3, // Shifted down 0.2 from -0.5
-    factory_large: -0.85, // Shifted up 0.1 from -0.75
+    factory_large: -1.15, // Shifted up 0.3 from -0.85 (cropped bottom, shifted up)
     water_tower: -0.5,
     house_medium: -0.3,
     mansion: -0.35,

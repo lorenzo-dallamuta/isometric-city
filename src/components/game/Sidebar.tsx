@@ -367,7 +367,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 className="h-7 w-7 text-muted-foreground hover:text-sidebar-foreground"
               >
                 <svg 
-                  className="w-4 h-4" 
+                  className="w-4 h-4 -scale-x-100" 
                   fill="none" 
                   viewBox="0 0 24 24" 
                   stroke="currentColor"

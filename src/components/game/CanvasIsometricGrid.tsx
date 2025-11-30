@@ -2205,6 +2205,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             } else {
               // getSpriteCoords handles building type to sprite key mapping
               coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
+              
+              // Special cropping for factory_large base sprite - crop bottom to remove asset below
+              if (buildingType === 'factory_large' && coords) {
+                const tileHeight = Math.floor(sheetHeight / activePack.rows);
+                coords.sh = coords.sh - tileHeight * 0.08; // Crop 8% from bottom
+              }
             }
             
             if (coords) {

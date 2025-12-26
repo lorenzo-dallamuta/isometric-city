@@ -7,6 +7,7 @@ import Game from '@/components/Game';
 import { useMobile } from '@/hooks/useMobile';
 import { getSpritePack, getSpriteCoords, DEFAULT_SPRITE_PACK_ID } from '@/lib/renderConfig';
 import { SavedCityMeta } from '@/types/game';
+import { decompressFromUTF16 } from 'lz-string';
 
 const STORAGE_KEY = 'isocity-game-state';
 const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index';
@@ -59,12 +60,28 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 // Check if there's a saved game in localStorage
+// Supports both compressed (lz-string) and uncompressed (legacy) formats
 function hasSavedGame(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      // Try to decompress first (new format)
+      // lz-string can return garbage when given invalid input, so check for valid JSON start
+      let jsonString = decompressFromUTF16(saved);
+      
+      // Check if decompression returned valid-looking JSON
+      if (!jsonString || !jsonString.startsWith('{')) {
+        // Check if saved string itself is JSON (legacy uncompressed format)
+        if (saved.startsWith('{')) {
+          jsonString = saved;
+        } else {
+          // Data is corrupted
+          return false;
+        }
+      }
+      
+      const parsed = JSON.parse(jsonString);
       return parsed.grid && parsed.gridSize && parsed.stats;
     }
   } catch {

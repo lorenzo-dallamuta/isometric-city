@@ -32,6 +32,33 @@ function formatPopulation(pop: number): string {
   return pop.toString();
 }
 
+// Helper function to load example state with proper error handling
+async function loadExampleState(
+  filename: string,
+  loadState: (stateString: string) => boolean,
+  setActivePanel: (panel: 'none' | 'budget' | 'statistics' | 'advisors' | 'settings') => void
+): Promise<void> {
+  try {
+    const response = await fetch(`/example-states/${filename}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch ${filename}:`, response.status);
+      alert(`Failed to load example state: ${response.status}`);
+      return;
+    }
+    const exampleState = await response.json();
+    const success = loadState(JSON.stringify(exampleState));
+    if (success) {
+      setActivePanel('none');
+    } else {
+      console.error('loadState returned false - invalid state format for', filename);
+      alert('Failed to load example state: invalid format');
+    }
+  } catch (e) {
+    console.error('Error loading example state:', e);
+    alert(`Error loading example state: ${e}`);
+  }
+}
+
 // Format money for display
 function formatMoney(money: number): string {
   if (money >= 1000000) return `$${(money / 1000000).toFixed(1)}M`;
@@ -503,136 +530,37 @@ export function SettingsPanel() {
             >
               Open Sprite Test View
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state.json', loadState, setActivePanel)}>
               Load Example State
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_2.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_2.json', loadState, setActivePanel)}>
               Load Example State 2
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_3.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_3.json', loadState, setActivePanel)}>
               Load Example State 3
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_4.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_4.json', loadState, setActivePanel)}>
               Load Example State 4
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_5.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_5.json', loadState, setActivePanel)}>
               Load Example State 5
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_6.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_6.json', loadState, setActivePanel)}>
               Load Example State 6
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_7.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_7.json', loadState, setActivePanel)}>
               Load Example State 7
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_8.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_8.json', loadState, setActivePanel)}>
               Load Example State 8
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_9.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_9.json', loadState, setActivePanel)}>
               Load Example State 9
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_10.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_10.json', loadState, setActivePanel)}>
               Load Example State 10
             </Button>
-            <Button
-              variant="outline"
-              className="w-full mt-2"
-              onClick={async () => {
-                const response = await fetch('/example-states/example_state_11.json');
-                const exampleState = await response.json();
-                loadState(JSON.stringify(exampleState));
-                setActivePanel('none');
-              }}
-            >
+            <Button variant="outline" className="w-full mt-2" onClick={() => loadExampleState('example_state_11.json', loadState, setActivePanel)}>
               Load Example State 11
             </Button>
             <div className="mt-4 pt-4 border-t border-border">

@@ -596,11 +596,21 @@ function loadCityState(cityId: string): GameState | null {
     const saved = localStorage.getItem(SAVED_CITY_PREFIX + cityId);
     if (saved) {
       // Try to decompress first (new format)
+      // lz-string can return garbage when given invalid input, so check for valid JSON start
       let jsonString = decompressFromUTF16(saved);
-      if (!jsonString) {
-        // Legacy uncompressed format
-        jsonString = saved;
+      
+      // Check if decompression returned valid-looking JSON
+      if (!jsonString || !jsonString.startsWith('{')) {
+        // Check if saved string itself is JSON (legacy uncompressed format)
+        if (saved.startsWith('{')) {
+          jsonString = saved;
+        } else {
+          // Data is corrupted
+          console.error('Corrupted city save data for:', cityId);
+          return null;
+        }
       }
+      
       const parsed = JSON.parse(jsonString);
       if (parsed && parsed.grid && parsed.gridSize && parsed.stats) {
         return parsed as GameState;

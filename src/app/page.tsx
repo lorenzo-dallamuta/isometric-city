@@ -318,13 +318,13 @@ export default function HomePage() {
       setIsChecking(false);
       setSavedCities(loadSavedCities());
       
-      // Check for room code in URL
+      // Check for room code in URL (legacy format) - redirect to new format
       const params = new URLSearchParams(window.location.search);
       const roomCode = params.get('room');
       if (roomCode && roomCode.length === 5) {
-        setPendingRoomCode(roomCode.toUpperCase());
-        setShowCoopModal(true);
-        // Keep the room code in URL so users can see it
+        // Redirect to new /coop/XXXXX format
+        window.location.replace(`/coop/${roomCode.toUpperCase()}`);
+        return;
       } else if (hasSavedGame()) {
         setShowGame(true);
       }

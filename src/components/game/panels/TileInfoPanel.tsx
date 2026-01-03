@@ -8,7 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { CloseIcon } from '@/components/ui/Icons';
 import { useGame } from '@/context/GameContext';
-import { SERVICE_CONFIG, SERVICE_BUILDING_TYPES } from '@/lib/simulation';
+import { 
+  SERVICE_CONFIG, 
+  SERVICE_BUILDING_TYPES,
+  SERVICE_MAX_LEVEL,
+  SERVICE_RANGE_INCREASE_PER_LEVEL,
+  SERVICE_UPGRADE_COST_BASE,
+} from '@/lib/simulation';
 
 interface TileInfoPanelProps {
   tile: Tile;
@@ -44,11 +50,10 @@ export function TileInfoPanel({
     // Service buildings are also Tools, so we can safely cast
     const baseCost = (TOOL_INFO as Record<string, { cost: number }>)[buildingType]?.cost ?? 0;
     const currentLevel = tile.building.level;
-    const maxLevel = 5;
     
-    if (currentLevel >= maxLevel) return null;
+    if (currentLevel >= SERVICE_MAX_LEVEL) return null;
     
-    const upgradeCost = baseCost * Math.pow(2, currentLevel);
+    const upgradeCost = baseCost * Math.pow(SERVICE_UPGRADE_COST_BASE, currentLevel);
     const canAfford = state.stats.money >= upgradeCost;
     const isUnderConstruction = tile.building.constructionProgress !== undefined && tile.building.constructionProgress < 100;
     const isAbandoned = tile.building.abandoned;
@@ -56,8 +61,8 @@ export function TileInfoPanel({
     // Get base range and calculate effective range
     const config = SERVICE_CONFIG[buildingType as keyof typeof SERVICE_CONFIG];
     const baseRange = config?.range ?? 0;
-    const currentEffectiveRange = Math.floor(baseRange * (1 + (currentLevel - 1) * 0.2));
-    const nextEffectiveRange = Math.floor(baseRange * (1 + currentLevel * 0.2));
+    const currentEffectiveRange = Math.floor(baseRange * (1 + (currentLevel - 1) * SERVICE_RANGE_INCREASE_PER_LEVEL));
+    const nextEffectiveRange = Math.floor(baseRange * (1 + currentLevel * SERVICE_RANGE_INCREASE_PER_LEVEL));
     
     return {
       cost: upgradeCost,
@@ -65,7 +70,7 @@ export function TileInfoPanel({
       isUnderConstruction,
       isAbandoned,
       currentLevel,
-      maxLevel,
+      maxLevel: SERVICE_MAX_LEVEL,
       baseRange,
       currentEffectiveRange,
       nextEffectiveRange,

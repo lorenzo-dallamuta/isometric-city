@@ -1204,6 +1204,11 @@ export const SERVICE_BUILDING_TYPES = new Set([
   'power_plant', 'water_tower'
 ]);
 
+// Service building upgrade constants
+export const SERVICE_MAX_LEVEL = 5;
+export const SERVICE_RANGE_INCREASE_PER_LEVEL = 0.5; // 50% per level
+export const SERVICE_UPGRADE_COST_BASE = 10; // Cost = baseCost * (2 ^ currentLevel)
+
 // Calculate service coverage from service buildings - optimized version
 function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage {
   const services = createServiceCoverage(size);
@@ -1239,10 +1244,10 @@ function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage
     const config = SERVICE_CONFIG[type as keyof typeof SERVICE_CONFIG];
     if (!config) continue;
     
-    // Calculate effective range based on building level (linear 20% increase per level)
+    // Calculate effective range based on building level
     // Level 1: 100%, Level 2: 120%, Level 3: 140%, Level 4: 160%, Level 5: 180%
     const baseRange = config.range;
-    const effectiveRange = baseRange * (1 + (level - 1) * 0.2);
+    const effectiveRange = baseRange * (1 + (level - 1) * SERVICE_RANGE_INCREASE_PER_LEVEL);
     const range = Math.floor(effectiveRange);
     const rangeSquared = range * range;
     
@@ -1312,7 +1317,7 @@ export function upgradeServiceBuilding(state: GameState, x: number, y: number): 
   if (!SERVICE_BUILDING_TYPES.has(buildingType)) return null;
   
   // Check if building is at max level
-  if (building.level >= 5) return null;
+  if (building.level >= SERVICE_MAX_LEVEL) return null;
   
   // Check if building construction is complete
   if (building.constructionProgress !== undefined && building.constructionProgress < 100) {
@@ -1326,8 +1331,8 @@ export function upgradeServiceBuilding(state: GameState, x: number, y: number): 
   const baseCost = TOOL_INFO[buildingType as keyof typeof TOOL_INFO]?.cost;
   if (!baseCost) return null;
   
-  // Calculate upgrade cost: baseCost * (2 ^ currentLevel)
-  const upgradeCost = baseCost * Math.pow(2, building.level);
+  // Calculate upgrade cost: baseCost * (SERVICE_UPGRADE_COST_BASE ^ currentLevel)
+  const upgradeCost = baseCost * Math.pow(SERVICE_UPGRADE_COST_BASE, building.level);
   
   // Check if player has enough money
   if (state.stats.money < upgradeCost) return null;

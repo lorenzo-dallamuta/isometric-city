@@ -57,7 +57,7 @@ import {
   OVERLAY_CIRCLE_FILL_COLORS,
   OVERLAY_HIGHLIGHT_COLORS,
 } from '@/components/game/overlays';
-import { SERVICE_CONFIG } from '@/lib/simulation';
+import { SERVICE_CONFIG, SERVICE_RANGE_INCREASE_PER_LEVEL } from '@/lib/simulation';
 import { drawPlaceholderBuilding } from '@/components/game/placeholders';
 import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage } from '@/components/game/imageLoader';
 import { TileInfoPanel } from '@/components/game/panels';
@@ -2042,10 +2042,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const config = SERVICE_CONFIG[tile.building.type as keyof typeof SERVICE_CONFIG];
               if (!config || !('range' in config)) continue;
               
-              // Calculate effective range based on building level (linear 20% increase per level)
+              // Calculate effective range based on building level (linear increase per level)
               // Level 1: 100%, Level 2: 120%, Level 3: 140%, Level 4: 160%, Level 5: 180%
               const baseRange = config.range;
-              const effectiveRange = baseRange * (1 + (tile.building.level - 1) * 0.2);
+              const effectiveRange = baseRange * (1 + (tile.building.level - 1) * SERVICE_RANGE_INCREASE_PER_LEVEL);
               const range = Math.floor(effectiveRange);
               
               // NOTE: For multi-tile service buildings (e.g. 2x2 hospital, 3x3 university),

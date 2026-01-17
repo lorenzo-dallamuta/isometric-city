@@ -36,6 +36,7 @@ const TOOL_CATEGORIES: Record<string, Tool[]> = {
   'Rides': [
     'ride_carousel', 'ride_teacups', 'ride_ferris_wheel', 'ride_drop_tower',
     'ride_swing_ride', 'ride_bumper_cars', 'ride_go_karts', 'ride_haunted_house',
+    'ride_log_flume',
   ],
   'Coasters': [
     'coaster_build',

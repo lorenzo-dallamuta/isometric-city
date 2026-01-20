@@ -12,6 +12,7 @@ function getToolBuildingSize(tool: Tool): { width: number; height: number } {
 }
 import { drawStraightTrack, drawCurvedTrack, drawSlopeTrack, drawLoopTrack, drawChainLift } from '@/components/coaster/tracks';
 import { drawGuest } from '@/components/coaster/guests';
+import { useCoasterLightingSystem } from '@/components/coaster/lightingSystem';
 
 // Track tools that support drag-to-draw
 const TRACK_DRAG_TOOLS: Tool[] = [
@@ -1481,6 +1482,7 @@ export function CoasterGrid({
   const isTrackDragTool = useMemo(() => TRACK_DRAG_TOOLS.includes(selectedTool), [selectedTool]);
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const [offset, setOffset] = useState({ x: 620, y: 160 });
@@ -1862,6 +1864,30 @@ const tile = grid[y][x];
     ctx.restore();
   }, [grid, gridSize, offset, zoom, canvasSize, tick, selectedTile, hoveredTile, selectedTool, spriteSheets, waterImage, state.guests, state.coasters, trackDragPreviewTiles, isTrackDragging]);
   
+  // Lighting canvas sizing
+  useEffect(() => {
+    const lightingCanvas = lightingCanvasRef.current;
+    if (!lightingCanvas) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    lightingCanvas.width = canvasSize.width * dpr;
+    lightingCanvas.height = canvasSize.height * dpr;
+    lightingCanvas.style.width = `${canvasSize.width}px`;
+    lightingCanvas.style.height = `${canvasSize.height}px`;
+  }, [canvasSize]);
+  
+  // Day/night lighting system
+  useCoasterLightingSystem({
+    canvasRef: lightingCanvasRef,
+    grid,
+    gridSize,
+    hour: state.hour,
+    offset,
+    zoom,
+    canvasWidth: canvasSize.width,
+    canvasHeight: canvasSize.height,
+  });
+  
   // Helper to calculate tiles in a line from start to end (with direction locking)
   const calculateLineTiles = useCallback((
     start: { x: number; y: number },
@@ -2058,10 +2084,10 @@ const tile = grid[y][x];
   }, [zoom, offset]);
   
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div ref={containerRef} className="w-full h-full relative">
       <canvas
         ref={canvasRef}
-        className="block cursor-grab active:cursor-grabbing"
+        className="block cursor-grab active:cursor-grabbing absolute inset-0"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -2075,6 +2101,11 @@ const tile = grid[y][x];
           setHoveredTile(null);
         }}
         onWheel={handleWheel}
+      />
+      {/* Lighting overlay canvas - renders day/night effects */}
+      <canvas
+        ref={lightingCanvasRef}
+        className="block absolute inset-0 pointer-events-none"
       />
     </div>
   );

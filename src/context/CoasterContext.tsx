@@ -68,6 +68,10 @@ interface CoasterContextValue {
   newGame: (name?: string) => void;
   hasSavedGame: boolean;
   
+  // Export/Import (for settings panel)
+  exportState: () => string;
+  loadState: (stateString: string) => boolean;
+  
   // State flags
   isStateReady: boolean;
 }
@@ -866,10 +870,15 @@ export function CoasterProvider({
         const newTick = prev.tick + 1;
         let { minute, hour, day, month, year } = prev;
         
-        // Time progression (1 tick = 1 game minute at speed 1)
-        minute += 1;
+        // Time progression - slower at night to make days feel longer
+        // During day (7-18): advance 1 minute per tick
+        // During night/dawn/dusk: advance 2 minutes per tick (faster to get through night)
+        const isDaytime = hour >= 7 && hour < 18;
+        const minuteIncrement = isDaytime ? 0.5 : 2; // Slower during day, faster at night
+        
+        minute += minuteIncrement;
         if (minute >= 60) {
-          minute = 0;
+          minute = minute - 60;
           hour += 1;
           if (hour >= 24) {
             hour = 0;
@@ -2223,6 +2232,35 @@ export function CoasterProvider({
     setHasSavedGame(false);
   }, []);
   
+  const exportState = useCallback((): string => {
+    return JSON.stringify(latestStateRef.current);
+  }, []);
+  
+  const loadState = useCallback((stateString: string): boolean => {
+    try {
+      const parsed = JSON.parse(stateString);
+      if (parsed && parsed.grid && parsed.gridSize) {
+        const normalizedState = normalizeLoadedState(parsed);
+        // Fix any disconnected tracks that share the same coasterTrackId
+        const { grid: fixedGrid, coasters: fixedCoasters } = ensureAllTracksHaveCoasters(
+          normalizedState.grid,
+          normalizedState.coasters
+        );
+        const finalState = {
+          ...normalizedState,
+          grid: fixedGrid,
+          coasters: fixedCoasters,
+        };
+        setState(finalState);
+        persistCoasterSave(finalState);
+        return true;
+      }
+    } catch (e) {
+      console.error('Failed to load state from string:', e);
+    }
+    return false;
+  }, [persistCoasterSave]);
+  
   // =============================================================================
   // CONTEXT VALUE
   // =============================================================================
@@ -2252,6 +2290,9 @@ export function CoasterProvider({
     loadGame,
     newGame,
     hasSavedGame,
+    
+    exportState,
+    loadState,
     
     isStateReady,
   };

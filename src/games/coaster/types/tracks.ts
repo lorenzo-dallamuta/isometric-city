@@ -83,6 +83,24 @@ export type TrackPieceType =
 /** Bank angle for turns */
 export type BankAngle = 0 | 15 | 30 | 45 | 60 | 90;
 
+/** Strut/support material style */
+export type StrutStyle = 'wood' | 'metal';
+
+/**
+ * Determine the strut style for a coaster type.
+ * Wooden coasters use wood struts (dense cross-bracing).
+ * Large steel coasters use metal struts (clean industrial look).
+ */
+export function getStrutStyleForCoasterType(coasterType: CoasterType): StrutStyle {
+  // Wooden coasters always use wood struts
+  if (coasterType === 'wooden_classic' || coasterType === 'wooden_twister') {
+    return 'wood';
+  }
+  
+  // All steel/modern coasters use metal struts
+  return 'metal';
+}
+
 // =============================================================================
 // TRACK PIECE INTERFACE
 // =============================================================================
@@ -95,6 +113,7 @@ export interface TrackPiece {
   bankAngle: BankAngle;
   chainLift: boolean; // Has chain lift (for lift hills)
   boosted: boolean; // Has launch boost
+  strutStyle: StrutStyle; // Support structure material (wood or metal)
 }
 
 // =============================================================================

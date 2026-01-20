@@ -473,6 +473,22 @@ const QUEUE_COLORS = {
   beltShadow: '#991b1b',    // Darker red for depth
 };
 
+// Guest colors for queue rendering
+const QUEUE_GUEST_COLORS = {
+  skin: ['#ffd5b4', '#f5c9a6', '#e5b898', '#d4a574', '#c49462', '#a67b5b', '#8b6b4a'],
+  shirt: ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4'],
+  pants: ['#1e293b', '#475569', '#64748b', '#0f172a'],
+};
+
+// Seeded random for consistent queue guest appearance
+function seededRandomQueue(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    return state / 0x7fffffff;
+  };
+}
+
 function drawQueueTile(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -480,244 +496,248 @@ function drawQueueTile(
   gridX: number,
   gridY: number,
   grid: Tile[][],
-  gridSize: number
+  gridSize: number,
+  queueGuestCount: number = 0,
+  tick: number = 0
 ) {
   const w = TILE_WIDTH;
   const h = TILE_HEIGHT;
   const cx = x + w / 2;
   const cy = y + h / 2;
 
-  // Check adjacent paths for connections
-  const hasPath = (gx: number, gy: number) => {
-    if (gx < 0 || gy < 0 || gx >= gridSize || gy >= gridSize) return false;
-    return grid[gy][gx].path || grid[gy][gx].queue;
-  };
-
-  const north = hasPath(gridX - 1, gridY);
-  const east = hasPath(gridX, gridY - 1);
-  const south = hasPath(gridX + 1, gridY);
-  const west = hasPath(gridX, gridY + 1);
-
   // Draw grass base first
   drawGrassTile(ctx, x, y, 1);
 
-  // Queue path dimensions (same as regular path)
-  const pathWidthRatio = 0.14;
-  const pathW = w * pathWidthRatio;
-  const halfWidth = pathW * 0.5;
-  const edgeStop = 0.98;
-
-  // Edge midpoints
-  const northEdgeX = x + w * 0.25;
-  const northEdgeY = y + h * 0.25;
-  const eastEdgeX = x + w * 0.75;
-  const eastEdgeY = y + h * 0.25;
-  const southEdgeX = x + w * 0.75;
-  const southEdgeY = y + h * 0.75;
-  const westEdgeX = x + w * 0.25;
-  const westEdgeY = y + h * 0.75;
-
-  // Direction vectors
-  const northDx = (northEdgeX - cx) / Math.hypot(northEdgeX - cx, northEdgeY - cy);
-  const northDy = (northEdgeY - cy) / Math.hypot(northEdgeX - cx, northEdgeY - cy);
-  const eastDx = (eastEdgeX - cx) / Math.hypot(eastEdgeX - cx, eastEdgeY - cy);
-  const eastDy = (eastEdgeY - cy) / Math.hypot(eastEdgeX - cx, eastEdgeY - cy);
-  const southDx = (southEdgeX - cx) / Math.hypot(southEdgeX - cx, southEdgeY - cy);
-  const southDy = (southEdgeY - cy) / Math.hypot(southEdgeX - cx, southEdgeY - cy);
-  const westDx = (westEdgeX - cx) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
-  const westDy = (westEdgeY - cy) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
-
-  const getPerp = (dx: number, dy: number) => ({ nx: -dy, ny: dx });
-
-  // Draw queue path surface (slightly different color than regular path)
+  // Draw the queue surface - full tile diamond
   ctx.fillStyle = QUEUE_COLORS.surface;
-
-  if (north) {
-    const stopX = cx + (northEdgeX - cx) * edgeStop;
-    const stopY = cy + (northEdgeY - cy) * edgeStop;
-    const perp = getPerp(northDx, northDy);
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-    ctx.closePath();
-    ctx.fill();
-  }
-  if (east) {
-    const stopX = cx + (eastEdgeX - cx) * edgeStop;
-    const stopY = cy + (eastEdgeY - cy) * edgeStop;
-    const perp = getPerp(eastDx, eastDy);
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-    ctx.closePath();
-    ctx.fill();
-  }
-  if (south) {
-    const stopX = cx + (southEdgeX - cx) * edgeStop;
-    const stopY = cy + (southEdgeY - cy) * edgeStop;
-    const perp = getPerp(southDx, southDy);
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-    ctx.closePath();
-    ctx.fill();
-  }
-  if (west) {
-    const stopX = cx + (westEdgeX - cx) * edgeStop;
-    const stopY = cy + (westEdgeY - cy) * edgeStop;
-    const perp = getPerp(westDx, westDy);
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Draw path edge lines
+  ctx.beginPath();
+  ctx.moveTo(cx, y);
+  ctx.lineTo(x + w, cy);
+  ctx.lineTo(cx, y + h);
+  ctx.lineTo(x, cy);
+  ctx.closePath();
+  ctx.fill();
+  
   ctx.strokeStyle = QUEUE_COLORS.surfaceEdge;
-  ctx.lineWidth = 0.8;
-  ctx.lineCap = 'round';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
 
-  const drawEdgeLine = (dirDx: number, dirDy: number, edgeX: number, edgeY: number) => {
-    const perp = getPerp(dirDx, dirDy);
-    const stopX = cx + (edgeX - cx) * edgeStop;
-    const stopY = cy + (edgeY - cy) * edgeStop;
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-    ctx.stroke();
-  };
-
-  if (north) drawEdgeLine(northDx, northDy, northEdgeX, northEdgeY);
-  if (east) drawEdgeLine(eastDx, eastDy, eastEdgeX, eastEdgeY);
-  if (south) drawEdgeLine(southDx, southDy, southEdgeX, southEdgeY);
-  if (west) drawEdgeLine(westDx, westDy, westEdgeX, westEdgeY);
-
-  // Queue barrier dimensions
-  const barrierOffset = halfWidth + 2; // Position barriers just outside the path
-  const postSpacing = 14; // Distance between stanchion posts
-  const postHeight = 6;   // Visual height of posts (isometric)
-  const postRadius = 1.2; // Radius of the pole
-
-  // Collect all post positions for depth-sorted rendering
-  const posts: { x: number; y: number; depth: number }[] = [];
-
-  // Draw queue barriers (stanchions with belt)
-  const drawQueueBarrierSegment = (
-    dirDx: number, 
-    dirDy: number, 
-    edgeX: number, 
-    edgeY: number
-  ) => {
-    const perp = getPerp(dirDx, dirDy);
-    const stopX = cx + (edgeX - cx) * edgeStop;
-    const stopY = cy + (edgeY - cy) * edgeStop;
-    const segLen = Math.hypot(stopX - cx, stopY - cy);
-    const numPosts = Math.max(2, Math.floor(segLen / postSpacing) + 1);
-
-    // Draw belts first (behind posts)
-    for (const side of [-1, 1]) {
-      const railOffX = perp.nx * barrierOffset * side;
-      const railOffY = perp.ny * barrierOffset * side;
-      const startX = cx + railOffX;
-      const startY = cy + railOffY;
-      const endX = stopX + railOffX;
-      const endY = stopY + railOffY;
-
-      // Belt shadow (lower)
-      ctx.strokeStyle = QUEUE_COLORS.beltShadow;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(startX, startY - postHeight * 0.4);
-      ctx.lineTo(endX, endY - postHeight * 0.4);
-      ctx.stroke();
-
-      // Main red belt (slightly higher to create 3D effect)
-      ctx.strokeStyle = QUEUE_COLORS.beltColor;
+  // ISOMETRIC-ALIGNED QUEUE LANES
+  // Diamond corners: top=(cx,y), right=(x+w,cy), bottom=(cx,y+h), left=(x,cy)
+  // Lanes run parallel to the SE edge (from top toward right) and NW edge (from left toward bottom)
+  // This is the isometric "horizontal" direction
+  
+  // Direction vectors for isometric axes:
+  // SE direction (top to right): (w/2, h/2)
+  // SW direction (top to left): (-w/2, h/2)
+  
+  const seX = w / 2;  // SE direction X component
+  const seY = h / 2;  // SE direction Y component
+  const swX = -w / 2; // SW direction X component  
+  const swY = h / 2;  // SW direction Y component
+  
+  // Normalize the directions
+  const seLen = Math.sqrt(seX * seX + seY * seY);
+  const seDirX = seX / seLen;
+  const seDirY = seY / seLen;
+  const swDirX = swX / seLen; // Same length
+  const swDirY = swY / seLen;
+  
+  // Create 3 lanes running in SE direction, offset in SW direction
+  const numLanes = 3;
+  const laneSpacing = 8; // Pixels between lane centers
+  const laneHalfLen = 22; // Half length of each lane
+  const corridorWidth = 3; // Half-width of corridor
+  const postH = 5;
+  const postR = 1.0;
+  
+  // Build zigzag path points
+  const pathPoints: { x: number; y: number }[] = [];
+  
+  for (let lane = 0; lane < numLanes; lane++) {
+    // Offset from center in SW direction
+    const offset = (lane - 1) * laneSpacing;
+    const laneCenterX = cx + swDirX * offset;
+    const laneCenterY = cy + swDirY * offset;
+    
+    // Lane endpoints (along SE direction)
+    const startX = laneCenterX - seDirX * laneHalfLen;
+    const startY = laneCenterY - seDirY * laneHalfLen;
+    const endX = laneCenterX + seDirX * laneHalfLen;
+    const endY = laneCenterY + seDirY * laneHalfLen;
+    
+    // Alternate direction for zigzag
+    if (lane % 2 === 0) {
+      pathPoints.push({ x: startX, y: startY });
+      pathPoints.push({ x: endX, y: endY });
+    } else {
+      pathPoints.push({ x: endX, y: endY });
+      pathPoints.push({ x: startX, y: startY });
+    }
+  }
+  
+  // Draw lane corridors (two parallel ropes per lane)
+  for (let lane = 0; lane < numLanes; lane++) {
+    const p1 = pathPoints[lane * 2];
+    const p2 = pathPoints[lane * 2 + 1];
+    
+    // Perpendicular to SE direction is SW direction
+    const perpX = swDirX * corridorWidth;
+    const perpY = swDirY * corridorWidth;
+    
+    // Draw two barrier ropes
+    for (const side of [1, -1]) {
+      const offsetX = perpX * side;
+      const offsetY = perpY * side;
+      
+      // Shadow
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
       ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(startX, startY - postHeight * 0.5);
-      ctx.lineTo(endX, endY - postHeight * 0.5);
+      ctx.moveTo(p1.x + offsetX + 0.5, p1.y + offsetY + 1);
+      ctx.lineTo(p2.x + offsetX + 0.5, p2.y + offsetY + 1);
       ctx.stroke();
-
-      // Collect post positions
-      for (let i = 0; i < numPosts; i++) {
-        const t = numPosts > 1 ? i / (numPosts - 1) : 0.5;
-        const postX = startX + (endX - startX) * t;
-        const postY = startY + (endY - startY) * t;
-        posts.push({ x: postX, y: postY, depth: postY });
+      
+      // Rope
+      ctx.strokeStyle = QUEUE_COLORS.beltColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p1.x + offsetX, p1.y + offsetY);
+      ctx.lineTo(p2.x + offsetX, p2.y + offsetY);
+      ctx.stroke();
+    }
+    
+    // Posts at lane corners
+    for (const pt of [p1, p2]) {
+      for (const side of [1, -1]) {
+        const px = pt.x + swDirX * corridorWidth * side;
+        const py = pt.y + swDirY * corridorWidth * side;
+        
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px, py - postH);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#777';
+        ctx.beginPath();
+        ctx.arc(px, py - postH, postR, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
-  };
-
-  // Draw barriers for each connected direction
-  if (north) drawQueueBarrierSegment(northDx, northDy, northEdgeX, northEdgeY);
-  if (east) drawQueueBarrierSegment(eastDx, eastDy, eastEdgeX, eastEdgeY);
-  if (south) drawQueueBarrierSegment(southDx, southDy, southEdgeX, southEdgeY);
-  if (west) drawQueueBarrierSegment(westDx, westDy, westEdgeX, westEdgeY);
-
-  // Sort posts by depth (back to front) for proper rendering
-  posts.sort((a, b) => a.depth - b.depth);
-
-  // Draw all stanchion posts
-  for (const post of posts) {
-    const px = post.x;
-    const py = post.y;
-
-    // Post shadow on ground
-    ctx.fillStyle = QUEUE_COLORS.postShadow;
-    ctx.beginPath();
-    ctx.ellipse(px + 1, py + 1, postRadius * 1.5, postRadius * 0.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Base (dark disk at ground level)
-    ctx.fillStyle = QUEUE_COLORS.postBase;
-    ctx.beginPath();
-    ctx.ellipse(px, py, postRadius * 1.8, postRadius * 1, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Pole (vertical line going up)
-    ctx.strokeStyle = QUEUE_COLORS.postPole;
-    ctx.lineWidth = postRadius * 2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px, py - postHeight);
-    ctx.stroke();
-
-    // Pole highlight (lighter edge for 3D effect)
-    ctx.strokeStyle = QUEUE_COLORS.postTop;
-    ctx.lineWidth = postRadius * 0.8;
-    ctx.beginPath();
-    ctx.moveTo(px - postRadius * 0.3, py - 1);
-    ctx.lineTo(px - postRadius * 0.3, py - postHeight + 1);
-    ctx.stroke();
-
-    // Top cap (bright circle at top of post)
-    ctx.fillStyle = QUEUE_COLORS.postTop;
-    ctx.beginPath();
-    ctx.arc(px, py - postHeight, postRadius * 1.2, 0, Math.PI * 2);
-    ctx.fill();
     
-    // Top cap highlight
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(px - postRadius * 0.3, py - postHeight - postRadius * 0.3, postRadius * 0.4, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw U-turn connector to next lane
+    if (lane < numLanes - 1) {
+      const nextP1 = pathPoints[(lane + 1) * 2];
+      
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p2.x + 0.5, p2.y + 1);
+      ctx.lineTo(nextP1.x + 0.5, nextP1.y + 1);
+      ctx.stroke();
+      
+      ctx.strokeStyle = QUEUE_COLORS.beltColor;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(nextP1.x, nextP1.y);
+      ctx.stroke();
+    }
+  }
+
+  // Draw guests along the zigzag path (precisely on centerline)
+  const maxGuestsPerTile = 12;
+  const guestsToShow = Math.min(queueGuestCount, maxGuestsPerTile);
+  
+  if (guestsToShow > 0) {
+    const rand = seededRandomQueue(gridX * 1000 + gridY * 7919);
+    
+    // Calculate total path length
+    let totalLength = 0;
+    const segLengths: number[] = [];
+    for (let i = 0; i < pathPoints.length - 1; i++) {
+      const dx = pathPoints[i + 1].x - pathPoints[i].x;
+      const dy = pathPoints[i + 1].y - pathPoints[i].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      segLengths.push(len);
+      totalLength += len;
+    }
+    
+    const guestPositions: { x: number; y: number; depth: number }[] = [];
+    
+    for (let i = 0; i < guestsToShow; i++) {
+      // Distribute evenly along the path centerline
+      const t = (i + 0.5) / guestsToShow;
+      const targetDist = t * totalLength;
+      
+      // Find segment
+      let accDist = 0;
+      let segIdx = 0;
+      for (let s = 0; s < segLengths.length; s++) {
+        if (accDist + segLengths[s] >= targetDist) {
+          segIdx = s;
+          break;
+        }
+        accDist += segLengths[s];
+      }
+      
+      // Interpolate within segment - NO random offset, stay on centerline
+      const segT = segLengths[segIdx] > 0 ? (targetDist - accDist) / segLengths[segIdx] : 0;
+      const p1 = pathPoints[segIdx];
+      const p2 = pathPoints[segIdx + 1] || p1;
+      
+      // Exact position on centerline (tiny random offset only)
+      const gx = p1.x + (p2.x - p1.x) * segT + (rand() - 0.5) * 1;
+      const gy = p1.y + (p2.y - p1.y) * segT + (rand() - 0.5) * 0.5;
+      
+      guestPositions.push({ x: gx, y: gy, depth: gy });
+    }
+    
+    // Sort by depth and draw
+    guestPositions.sort((a, b) => a.depth - b.depth);
+    
+    for (let i = 0; i < guestPositions.length; i++) {
+      const pos = guestPositions[i];
+      const guestRand = seededRandomQueue(gridX * 1000 + gridY * 7919 + i * 1337);
+      
+      // Pick colors
+      const skinColor = QUEUE_GUEST_COLORS.skin[Math.floor(guestRand() * QUEUE_GUEST_COLORS.skin.length)];
+      const shirtColor = QUEUE_GUEST_COLORS.shirt[Math.floor(guestRand() * QUEUE_GUEST_COLORS.shirt.length)];
+      const pantsColor = QUEUE_GUEST_COLORS.pants[Math.floor(guestRand() * QUEUE_GUEST_COLORS.pants.length)];
+      
+      // Idle animation (slight sway)
+      const idleCycle = Math.sin((tick * 0.08 + i * 0.5) * 2);
+      const swayX = idleCycle * 0.3;
+      const gx = pos.x + swayX;
+      const gy = pos.y;
+      
+      // Draw simple guest sprite (scaled down for queue)
+      const scale = 0.8;
+      
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.beginPath();
+      ctx.ellipse(gx, gy + 0.5 * scale, 1.2 * scale, 0.6 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Legs/pants
+      ctx.fillStyle = pantsColor;
+      ctx.fillRect(gx - 0.6 * scale, gy - 1.5 * scale, 0.4 * scale, 1.2 * scale);
+      ctx.fillRect(gx + 0.2 * scale, gy - 1.5 * scale, 0.4 * scale, 1.2 * scale);
+      
+      // Torso
+      ctx.fillStyle = shirtColor;
+      ctx.fillRect(gx - 0.8 * scale, gy - 2.8 * scale, 1.6 * scale, 1.4 * scale);
+      
+      // Head
+      ctx.fillStyle = skinColor;
+      ctx.beginPath();
+      ctx.arc(gx, gy - 3.8 * scale, 0.8 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.setLineDash([]);
@@ -846,19 +866,21 @@ function drawTrackSegment(
 ) {
   if (!trackPiece) return;
   
-  const { type, direction, startHeight, endHeight, chainLift } = trackPiece;
+  const { type, direction, startHeight, endHeight, chainLift, strutStyle } = trackPiece;
+  // Default to metal if strutStyle not defined (for backwards compatibility with old saves)
+  const effectiveStrutStyle = strutStyle ?? 'metal';
   
   if (type === 'straight_flat' || type === 'lift_hill_start' || type === 'lift_hill_middle' || type === 'lift_hill_end') {
-    drawStraightTrack(ctx, x, y, direction, startHeight);
+    drawStraightTrack(ctx, x, y, direction, startHeight, undefined, effectiveStrutStyle);
   } else if (type === 'turn_left_flat' || type === 'turn_right_flat') {
-    drawCurvedTrack(ctx, x, y, direction, type === 'turn_right_flat', startHeight);
+    drawCurvedTrack(ctx, x, y, direction, type === 'turn_right_flat', startHeight, undefined, effectiveStrutStyle);
   } else if (type === 'slope_up_small' || type === 'slope_down_small') {
-    drawSlopeTrack(ctx, x, y, direction, startHeight, endHeight);
+    drawSlopeTrack(ctx, x, y, direction, startHeight, endHeight, undefined, effectiveStrutStyle);
   } else if (type === 'loop_vertical') {
-    drawLoopTrack(ctx, x, y, direction, Math.max(3, endHeight + 3));
+    drawLoopTrack(ctx, x, y, direction, Math.max(3, endHeight + 3), undefined, effectiveStrutStyle);
   } else {
     // Default fallback to straight for unimplemented pieces
-    drawStraightTrack(ctx, x, y, direction, startHeight);
+    drawStraightTrack(ctx, x, y, direction, startHeight, undefined, effectiveStrutStyle);
   }
   
   // Only draw chain lift on slope_up pieces (never on slope_down)
@@ -1032,7 +1054,112 @@ function getCarTravelDirection(
   return t < 0.5 ? entryDir : exitDir;
 }
 
-function drawCoasterCar(ctx: CanvasRenderingContext2D, x: number, y: number, direction: string) {
+// Guest colors for rendering riders in coaster cars
+const RIDER_COLORS = {
+  skin: ['#ffd5b4', '#f5c9a6', '#e5b898', '#d4a574', '#c49462'],
+  shirt: ['#ef4444', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316'],
+};
+
+/**
+ * Draw boarding guests at a station tile
+ * Shows guests walking toward or away from the coaster car
+ */
+function drawBoardingGuests(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  isBoarding: boolean, // true = boarding, false = exiting
+  guestCount: number,
+  tick: number,
+  loadingProgress: number // 0 to 1, how far along the loading cycle
+) {
+  const w = TILE_WIDTH;
+  const h = TILE_HEIGHT;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  
+  // Platform area (to the side of the track)
+  const platformX = cx - 18;
+  const platformY = cy + 4;
+  
+  // Car position (center of tile, elevated)
+  const carX = cx;
+  const carY = cy - 4;
+  
+  const guestsToShow = Math.min(guestCount, 8);
+  const scale = 1.5; // Larger scale for visibility
+  
+  for (let i = 0; i < guestsToShow; i++) {
+    // Stagger guest animations
+    const guestProgress = Math.max(0, Math.min(1, loadingProgress * 1.5 - i * 0.1));
+    
+    // Guest walks from platform to car position (or vice versa)
+    // Spread guests out on platform
+    const row = Math.floor(i / 4);
+    const col = i % 4;
+    const startX = platformX + col * 5;
+    const startY = platformY + row * 6;
+    
+    // End positions near the car (alternating sides)
+    const endX = carX + (col - 1.5) * 4;
+    const endY = carY + row * 2;
+    
+    let guestX: number, guestY: number;
+    if (isBoarding) {
+      guestX = startX + (endX - startX) * guestProgress;
+      guestY = startY + (endY - startY) * guestProgress;
+    } else {
+      guestX = endX + (startX - endX) * guestProgress;
+      guestY = endY + (startY - endY) * guestProgress;
+    }
+    
+    // Always draw guest during loading (visible during the whole animation)
+    if (guestProgress < 0.98) {
+      const colorSeed = (i * 17 + Math.floor(tick / 200)) % 100;
+      const skinColor = RIDER_COLORS.skin[colorSeed % RIDER_COLORS.skin.length];
+      const shirtColor = RIDER_COLORS.shirt[(colorSeed + 3) % RIDER_COLORS.shirt.length];
+      
+      // Walking animation (faster when moving)
+      const walkSpeed = guestProgress > 0.1 && guestProgress < 0.9 ? 0.3 : 0.1;
+      const walkCycle = Math.sin((tick * walkSpeed + i * 2) * 2);
+      const bobY = Math.abs(walkCycle) * 0.6 * scale;
+      
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(guestX, guestY + 1 * scale, 2 * scale, 1 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Legs
+      ctx.fillStyle = '#1e293b';
+      const legWidth = 0.8 * scale;
+      const legHeight = 2 * scale;
+      ctx.fillRect(guestX - 1 * scale, guestY - 3 * scale - bobY, legWidth, legHeight);
+      ctx.fillRect(guestX + 0.2 * scale, guestY - 3 * scale - bobY, legWidth, legHeight);
+      
+      // Body
+      ctx.fillStyle = shirtColor;
+      ctx.fillRect(guestX - 1.5 * scale, guestY - 5 * scale - bobY, 3 * scale, 2.5 * scale);
+      
+      // Head
+      ctx.fillStyle = skinColor;
+      ctx.beginPath();
+      ctx.arc(guestX, guestY - 6.5 * scale - bobY, 1.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawCoasterCar(
+  ctx: CanvasRenderingContext2D, 
+  x: number, 
+  y: number, 
+  direction: string,
+  carIndex: number = 0,
+  isLoading: boolean = false,
+  guestCount: number = 4, // Number of guests in this car
+  tick: number = 0
+) {
   const angle = DIRECTION_ANGLES[direction] ?? 0;
   
   // Car dimensions - scaled down by 30%
@@ -1049,8 +1176,8 @@ function drawCoasterCar(ctx: CanvasRenderingContext2D, x: number, y: number, dir
   ctx.ellipse(0, 4, carLength * 0.45, carWidth * 0.6, 0, 0, Math.PI * 2);
   ctx.fill();
   
-  // Main body (red)
-  ctx.fillStyle = '#dc2626';
+  // Main body (red, slightly darker when loading)
+  ctx.fillStyle = isLoading ? '#b91c1c' : '#dc2626';
   ctx.beginPath();
   ctx.moveTo(-carLength * 0.45, -carWidth);
   ctx.lineTo(carLength * 0.35, -carWidth);
@@ -1062,7 +1189,7 @@ function drawCoasterCar(ctx: CanvasRenderingContext2D, x: number, y: number, dir
   ctx.fill();
   
   // Darker back section
-  ctx.fillStyle = '#b91c1c';
+  ctx.fillStyle = '#991b1b';
   ctx.fillRect(-carLength * 0.45, -carWidth * 0.8, carLength * 0.25, carWidth * 1.6);
   
   // Yellow stripe/highlight
@@ -1075,6 +1202,68 @@ function drawCoasterCar(ctx: CanvasRenderingContext2D, x: number, y: number, dir
   ctx.beginPath();
   ctx.arc(carLength * 0.3, 0, carWidth * 0.4, 0, Math.PI * 2);
   ctx.fill();
+  
+  // Draw riders (guests) in the car
+  const ridersToShow = Math.min(guestCount, 4);
+  if (ridersToShow > 0) {
+    // Riders are positioned in 2 rows of 2
+    const riderPositions = [
+      { rx: -carLength * 0.15, ry: -carWidth * 0.4 },
+      { rx: -carLength * 0.15, ry: carWidth * 0.4 },
+      { rx: carLength * 0.1, ry: -carWidth * 0.4 },
+      { rx: carLength * 0.1, ry: carWidth * 0.4 },
+    ];
+    
+    for (let i = 0; i < ridersToShow; i++) {
+      const pos = riderPositions[i];
+      // Seeded colors based on car index and rider position
+      const colorSeed = (carIndex * 7 + i * 13) % 100;
+      const skinColor = RIDER_COLORS.skin[colorSeed % RIDER_COLORS.skin.length];
+      const shirtColor = RIDER_COLORS.shirt[(colorSeed + 3) % RIDER_COLORS.shirt.length];
+      
+      // Loading animation - riders bob up and down when loading
+      const loadingBob = isLoading ? Math.sin(tick * 0.15 + i * 1.5) * 0.8 : 0;
+      
+      // Rider head (circle)
+      ctx.fillStyle = skinColor;
+      ctx.beginPath();
+      ctx.arc(pos.rx, pos.ry - 2 + loadingBob, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Rider body (small rectangle)
+      ctx.fillStyle = shirtColor;
+      ctx.fillRect(pos.rx - 0.8, pos.ry - 0.8 + loadingBob, 1.6, 1.2);
+    }
+    
+    // Draw raised hands when not loading (riders having fun!)
+    if (!isLoading && ridersToShow >= 2) {
+      const armWave = Math.sin(tick * 0.2) * 0.5;
+      ctx.strokeStyle = RIDER_COLORS.skin[(carIndex * 7) % RIDER_COLORS.skin.length];
+      ctx.lineWidth = 0.5;
+      ctx.lineCap = 'round';
+      
+      // First rider's raised arms
+      ctx.beginPath();
+      ctx.moveTo(riderPositions[0].rx - 0.5, riderPositions[0].ry - 2.5);
+      ctx.lineTo(riderPositions[0].rx - 1.5, riderPositions[0].ry - 3.5 + armWave);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(riderPositions[0].rx + 0.5, riderPositions[0].ry - 2.5);
+      ctx.lineTo(riderPositions[0].rx + 1.5, riderPositions[0].ry - 3.5 - armWave);
+      ctx.stroke();
+    }
+  }
+  
+  // Loading indicator - small blinking light when loading
+  if (isLoading) {
+    const blink = Math.sin(tick * 0.3) > 0;
+    if (blink) {
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(-carLength * 0.35, -carWidth - 1.5, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   
   ctx.restore();
 }
@@ -1226,10 +1415,18 @@ export function CoasterGrid({
     ctx.translate(offset.x / zoom, offset.y / zoom);
     
     // Calculate visible bounds for culling
-    const viewLeft = -offset.x / zoom - TILE_WIDTH;
-    const viewTop = -offset.y / zoom - TILE_HEIGHT;
-    const viewRight = canvasSize.width / zoom - offset.x / zoom + TILE_WIDTH;
-    const viewBottom = canvasSize.height / zoom - offset.y / zoom + TILE_HEIGHT;
+    // Use larger margins to account for:
+    // - Elevated tracks (height * HEIGHT_UNIT = 20px per level, max ~10+ levels = 200+ px)
+    // - Support structures extending downward from elevated tracks
+    // - Loop tracks that extend well beyond tile bounds (radius up to 60+ px)
+    // - Isometric projection causing horizontal spread
+    const CULL_MARGIN_X = TILE_WIDTH * 4;
+    const CULL_MARGIN_TOP = TILE_HEIGHT + 400; // Large margin for tall elevated elements
+    const CULL_MARGIN_BOTTOM = TILE_HEIGHT * 3; // Extra for supports and sprites
+    const viewLeft = -offset.x / zoom - CULL_MARGIN_X;
+    const viewTop = -offset.y / zoom - CULL_MARGIN_TOP;
+    const viewRight = canvasSize.width / zoom - offset.x / zoom + CULL_MARGIN_X;
+    const viewBottom = canvasSize.height / zoom - offset.y / zoom + CULL_MARGIN_BOTTOM;
     
     const guestsByTile = new Map<string, typeof state.guests>();
     state.guests.forEach(guest => {
@@ -1242,13 +1439,49 @@ export function CoasterGrid({
       }
     });
     
-    const carsByTile = new Map<string, { x: number; y: number; direction: string }[]>();
+    // Enhanced car data with loading state and guest info
+    interface CarRenderData {
+      x: number;
+      y: number;
+      direction: string;
+      carIndex: number;
+      isLoading: boolean;
+      guestCount: number;
+    }
+    const carsByTile = new Map<string, CarRenderData[]>();
+    
+    // Track station tiles with loading trains for boarding animation
+    interface StationLoadingData {
+      x: number;
+      y: number;
+      isBoarding: boolean;
+      loadingProgress: number;
+      guestCount: number;
+    }
+    const stationLoadingData: StationLoadingData[] = [];
+    
     state.coasters.forEach(coaster => {
       if (coaster.track.length === 0 || coaster.trackTiles.length === 0) return;
       const trackLen = coaster.track.length;
       
       coaster.trains.forEach(train => {
-        train.cars.forEach(car => {
+        const isLoading = train.state === 'loading' || train.state === 'dispatching';
+        
+        // Track station loading for boarding animation
+        if (isLoading && coaster.trackTiles[0]) {
+          const stationTile = coaster.trackTiles[0];
+          const loadingDuration = 8; // Approximate loading duration
+          const progress = Math.max(0, Math.min(1, 1 - (train.stateTimer / loadingDuration)));
+          stationLoadingData.push({
+            x: stationTile.x,
+            y: stationTile.y,
+            isBoarding: train.state === 'loading',
+            loadingProgress: progress,
+            guestCount: 4 * train.cars.length, // Approximate guests loading
+          });
+        }
+        
+        train.cars.forEach((car, carIdx) => {
           // Handle negative track progress by wrapping around
           let normalizedProgress = car.trackProgress % trackLen;
           if (normalizedProgress < 0) normalizedProgress += trackLen;
@@ -1269,7 +1502,13 @@ export function CoasterGrid({
 
           const key = `${trackTile.x},${trackTile.y}`;
           const existing = carsByTile.get(key);
-          const carData = { ...pos, direction: travelDirection };
+          const carData: CarRenderData = { 
+            ...pos, 
+            direction: travelDirection,
+            carIndex: carIdx,
+            isLoading,
+            guestCount: car.guests.length > 0 ? car.guests.length : 4, // Default 4 riders if not tracked
+          };
           if (existing) {
             existing.push(carData);
           } else {
@@ -1277,6 +1516,12 @@ export function CoasterGrid({
           }
         });
       });
+    });
+    
+    // Create a lookup for station loading data by tile
+    const stationLoadingByTile = new Map<string, StationLoadingData>();
+    stationLoadingData.forEach(data => {
+      stationLoadingByTile.set(`${data.x},${data.y}`, data);
     });
     
     // Draw tiles (back to front for proper depth)
@@ -1297,7 +1542,9 @@ const tile = grid[y][x];
         if (tile.terrain === 'water') {
           drawWaterTile(ctx, screenX, screenY, x, y, grid, gridSize, waterImage, zoom);
         } else if (tile.queue) {
-          drawQueueTile(ctx, screenX, screenY, x, y, grid, gridSize);
+          // Count guests in 'queuing' state on this tile
+          const queueGuests = guestsByTile.get(`${x},${y}`)?.filter(g => g.state === 'queuing') || [];
+          drawQueueTile(ctx, screenX, screenY, x, y, grid, gridSize, queueGuests.length, tick);
         } else if (tile.path) {
           drawPathTile(ctx, screenX, screenY, x, y, grid, gridSize);
         } else {
@@ -1328,8 +1575,22 @@ const tile = grid[y][x];
         const cars = carsByTile.get(`${x},${y}`);
         if (cars) {
           cars.forEach(car => {
-            drawCoasterCar(ctx, car.x, car.y, car.direction);
+            drawCoasterCar(ctx, car.x, car.y, car.direction, car.carIndex, car.isLoading, car.guestCount, tick);
           });
+        }
+        
+        // Draw boarding/exiting guests at station tiles
+        const stationLoading = stationLoadingByTile.get(`${x},${y}`);
+        if (stationLoading) {
+          drawBoardingGuests(
+            ctx,
+            screenX,
+            screenY,
+            stationLoading.isBoarding,
+            stationLoading.guestCount,
+            tick,
+            stationLoading.loadingProgress
+          );
         }
         
         // Selection highlight

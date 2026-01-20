@@ -995,9 +995,9 @@ function drawTrackSegment(
   } else if (type === 'slope_up_small' || type === 'slope_down_small') {
     drawSlopeTrack(ctx, x, y, direction, startHeight, endHeight, undefined, effectiveStrutStyle);
   } else if (type === 'loop_vertical') {
-    // Pass the startHeight to position the loop at the correct elevation
+    // Draw loop - the function handles edge connections internally
     const loopHeight = Math.max(3, endHeight + 3);
-    // Adjust y position for track elevation (loop base should be at startHeight)
+    // Offset Y for track elevation
     const elevatedY = y - startHeight * HEIGHT_UNIT;
     drawLoopTrack(ctx, x, elevatedY, direction, loopHeight, undefined, effectiveStrutStyle);
   } else {
@@ -1072,42 +1072,54 @@ function getTrackPoint(
   }
   
   if (type === 'loop_vertical') {
-    // Match the loop drawing logic EXACTLY
-    // IMPORTANT: Don't use the interpolated 'center' - it has wrong height offset for loops
-    // The loop base should be at the tile center with startHeight elevation only
-    const loopHeight = Math.max(3, trackPiece.endHeight + 3); // Same as drawTrackSegment call
-    const baseRadius = Math.max(20, loopHeight * HEIGHT_UNIT * 0.28);
-    const verticalStretch = 1.15;
-    const horizontalScale = 1.0;
+    // Match the loop drawing logic EXACTLY - fixed size regardless of track height
+    const loopRadius = 30;
     
-    // Loop base position - tile center at track's start height (not interpolated!)
-    const baseElevation = trackPiece.startHeight * HEIGHT_UNIT;
-    const loopCenterX = startX + w / 2;
-    const loopCenterY = startY + h / 2 - baseElevation;
+    // Determine entry and exit edges based on direction (same as drawing)
+    let entryEdge: { x: number; y: number };
+    let exitEdge: { x: number; y: number };
     
+    if (direction === 'south') {
+      entryEdge = { x: startX + w * 0.25, y: startY + h * 0.25 };
+      exitEdge = { x: startX + w * 0.75, y: startY + h * 0.75 };
+    } else if (direction === 'north') {
+      entryEdge = { x: startX + w * 0.75, y: startY + h * 0.75 };
+      exitEdge = { x: startX + w * 0.25, y: startY + h * 0.25 };
+    } else if (direction === 'east') {
+      entryEdge = { x: startX + w * 0.25, y: startY + h * 0.75 };
+      exitEdge = { x: startX + w * 0.75, y: startY + h * 0.25 };
+    } else { // west
+      entryEdge = { x: startX + w * 0.75, y: startY + h * 0.25 };
+      exitEdge = { x: startX + w * 0.25, y: startY + h * 0.75 };
+    }
+    
+    // Track direction for bulge
+    const trackDx = exitEdge.x - entryEdge.x;
+    const trackDy = exitEdge.y - entryEdge.y;
+    const trackLen = Math.hypot(trackDx, trackDy);
+    
+    // Forward progress: linear from entry to exit
+    const forwardX = entryEdge.x + t * (exitEdge.x - entryEdge.x);
+    const forwardY = entryEdge.y + t * (exitEdge.y - entryEdge.y);
+    
+    // Loop angle: full rotation (0 to 2π)
     const angle = t * Math.PI * 2;
     
-    // Same radiusMod formula as drawLoopTrack
-    const radiusMod = 1.0 - 0.15 * (1 - Math.abs(Math.cos(angle)));
+    // Height: (1 - cos(angle)) gives 0 at entry/exit, 2*radius at top
+    const heightOffset = (1 - Math.cos(angle)) * loopRadius;
     
-    // Forward displacement along track direction
-    const forwardOffset = Math.sin(angle) * baseRadius * horizontalScale;
+    // Horizontal bulge to make it circular - must match drawing
+    const bulgeFactor = 0.9;
+    const bulgeOffset = Math.sin(angle) * loopRadius * bulgeFactor;
+    const bulgeX = (trackDx / trackLen) * bulgeOffset;
+    const bulgeY = (trackDy / trackLen) * bulgeOffset;
     
-    // Height displacement with vertical stretch and radiusMod
-    const loopVertOffset = (1 - Math.cos(angle)) * baseRadius * verticalStretch * radiusMod;
-    
-    // Use same direction vectors as drawLoopTrack (isometric directions)
-    const dirVectors: Record<string, { dx: number; dy: number }> = {
-      north: { dx: -0.7071, dy: -0.4243 },
-      east: { dx: 0.7071, dy: -0.4243 },
-      south: { dx: 0.7071, dy: 0.4243 },
-      west: { dx: -0.7071, dy: 0.4243 },
-    };
-    const dir = dirVectors[direction] || { dx: 0.7071, dy: 0.4243 };
+    // Apply track elevation
+    const elevation = trackPiece.startHeight * HEIGHT_UNIT;
     
     return {
-      x: loopCenterX + dir.dx * forwardOffset,
-      y: loopCenterY + dir.dy * forwardOffset - loopVertOffset,
+      x: forwardX + bulgeX,
+      y: forwardY + bulgeY - heightOffset - elevation,
     };
   }
   
@@ -1608,13 +1620,15 @@ export function CoasterGrid({
         const isLoading = train.state === 'loading' || train.state === 'dispatching';
         
         // Track station loading for boarding animation
-        if (isLoading && coaster.trackTiles[0]) {
-          const stationTile = coaster.trackTiles[0];
+        // Use the coaster's designated station tile (which should have an adjacent queue)
+        if (isLoading) {
+          const stationX = coaster.stationTileX;
+          const stationY = coaster.stationTileY;
           const loadingDuration = 8; // Approximate loading duration
           const progress = Math.max(0, Math.min(1, 1 - (train.stateTimer / loadingDuration)));
           stationLoadingData.push({
-            x: stationTile.x,
-            y: stationTile.y,
+            x: stationX,
+            y: stationY,
             isBoarding: train.state === 'loading',
             loadingProgress: progress,
             guestCount: 4 * train.cars.length, // Approximate guests loading

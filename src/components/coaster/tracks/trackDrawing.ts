@@ -821,8 +821,8 @@ function drawSupport(
 
 /**
  * Draw a vertical loop section
- * Uses a clothoid/teardrop shape like real roller coasters - taller than wide,
- * with a tighter radius at the top to reduce g-forces when inverted
+ * The loop connects entry edge to exit edge while going up, over (inverted), and down.
+ * Train moves forward while completing the loop - like RCT style stretched loops.
  */
 export function drawLoopTrack(
   ctx: CanvasRenderingContext2D,
@@ -835,160 +835,158 @@ export function drawLoopTrack(
 ) {
   const w = TILE_WIDTH;
   const h = TILE_HEIGHT;
-  const centerX = startX + w / 2;
-  const centerY = startY + h / 2;
   
-  // Base loop size - keep it proportional but not too large
-  const baseRadius = Math.max(20, loopHeight * HEIGHT_UNIT * 0.28);
+  // Edge midpoints - MUST match straight track endpoints for proper connections
+  const northEdge = { x: startX + w * 0.25, y: startY + h * 0.25 };
+  const eastEdge = { x: startX + w * 0.75, y: startY + h * 0.25 };
+  const southEdge = { x: startX + w * 0.75, y: startY + h * 0.75 };
+  const westEdge = { x: startX + w * 0.25, y: startY + h * 0.75 };
+  const tileCenter = { x: startX + w / 2, y: startY + h / 2 };
+  
+  // Determine entry and exit edges based on direction
+  let entryEdge: Point;
+  let exitEdge: Point;
+  
+  if (direction === 'south') {
+    entryEdge = northEdge;
+    exitEdge = southEdge;
+  } else if (direction === 'north') {
+    entryEdge = southEdge;
+    exitEdge = northEdge;
+  } else if (direction === 'east') {
+    entryEdge = westEdge;
+    exitEdge = eastEdge;
+  } else { // west
+    entryEdge = eastEdge;
+    exitEdge = westEdge;
+  }
+  
+  // Loop parameters - fixed size regardless of track height
+  const loopRadius = 30;
   const numSegments = 32;
   const railOffset = TRACK_WIDTH / 2;
   
-  // Get direction vector for the track
-  const dir = DIRECTIONS[direction];
+  // Perpendicular direction (for rail offset)
+  const trackDx = exitEdge.x - entryEdge.x;
+  const trackDy = exitEdge.y - entryEdge.y;
+  const trackLen = Math.hypot(trackDx, trackDy);
+  const perpX = -trackDy / trackLen;
+  const perpY = trackDx / trackLen;
   
-  // Clothoid/teardrop loop parameters:
-  // Real coaster loops are slightly taller than wide with a tighter curve at the top
-  // Keep it subtle - we want a loop shape, not an almond!
-  const verticalStretch = 1.15; // Just slightly taller than wide
-  const horizontalScale = 1.0; // Full width - don't compress horizontally
-  
-  // For a clothoid-like teardrop shape:
-  // The radius varies based on position - slightly smaller at top, larger at bottom
-  // This creates a subtle teardrop effect without losing the loop shape
-  
-  const getLoopPoint = (angle: number, railSide: number = 0): Point => {
-    // Subtle variable radius based on angle:
-    // - At bottom (angle = 0 or 2PI): full radius for gentle entry/exit
-    // - At top (angle = PI): slightly reduced radius for tighter curve
-    // Keep the modulation subtle (only 15% reduction at top)
-    const radiusMod = 1.0 - 0.15 * (1 - Math.abs(Math.cos(angle)));
+  /**
+   * Get point on the loop at parameter t (0 to 1)
+   * t=0: entry edge, t=0.5: top of loop (inverted), t=1: exit edge
+   * The train moves forward while looping - a "stretched" vertical loop
+   */
+  const getLoopPoint = (t: number, railSide: number = 0): Point => {
+    // Forward progress: linear from entry to exit
+    const forwardX = entryEdge.x + t * (exitEdge.x - entryEdge.x);
+    const forwardY = entryEdge.y + t * (exitEdge.y - entryEdge.y);
     
-    // Forward displacement along track direction
-    const forwardOffset = Math.sin(angle) * baseRadius * horizontalScale;
+    // Loop angle: full rotation (0 to 2π)
+    const angle = t * Math.PI * 2;
     
-    // Height displacement (slightly stretched vertically for subtle teardrop)
-    // Apply radiusMod only to height to create the teardrop pinch at top
-    const heightOffset = (1 - Math.cos(angle)) * baseRadius * verticalStretch * radiusMod;
+    // Height: (1 - cos(angle)) gives 0 at entry/exit, 2*radius at top
+    const heightOffset = (1 - Math.cos(angle)) * loopRadius;
     
-    // Base position at center of tile
-    const baseX = centerX + dir.dx * forwardOffset;
-    const baseY = centerY + dir.dy * forwardOffset - heightOffset;
+    // Horizontal "bulge" to make it circular - larger value = more circular loop
+    // sin(angle) gives outward bulge in first half, inward in second half
+    const bulgeFactor = 0.9; // How much the loop bulges outward (0.9 = nearly circular)
+    const bulgeOffset = Math.sin(angle) * loopRadius * bulgeFactor;
     
-    // Rail offset perpendicular to the loop plane (left/right of track)
-    // Perpendicular to track direction
-    const perpX = -dir.dy;
-    const perpY = dir.dx;
+    // Apply bulge along track direction (makes loop visible from side)
+    const bulgeX = (trackDx / trackLen) * bulgeOffset;
+    const bulgeY = (trackDy / trackLen) * bulgeOffset;
     
     return {
-      x: baseX + perpX * railOffset * railSide,
-      y: baseY + perpY * railOffset * railSide
+      x: forwardX + bulgeX + perpX * railOffset * railSide,
+      y: forwardY + bulgeY - heightOffset + perpY * railOffset * railSide
     };
   };
   
   // Draw support structure first (behind the loop)
-  // Use strut style colors
   const isWood = strutStyle === 'wood';
   const mainColor = isWood ? COLORS.woodMain : COLORS.metalMain;
   const darkColor = isWood ? COLORS.woodDark : COLORS.metalDark;
   const lightColor = isWood ? COLORS.woodLight : COLORS.metalLight;
   const accentColor = isWood ? COLORS.woodAccent : COLORS.metalMain;
   
-  ctx.fillStyle = mainColor;
-  ctx.strokeStyle = lightColor;
-  ctx.lineWidth = 1;
-  
-  // Main vertical support column at center
-  // Height accounts for the stretched teardrop shape (2x base * vertical stretch)
+  // Support extends from ground (bottom of tile) up past the loop top
+  // Ground is at the bottom edge of the isometric tile
+  const groundY = startY + h; // Bottom of tile (ground level)
+  const supportTopY = tileCenter.y - loopRadius * 2 - 3;
+  const supportHeight = groundY - supportTopY;
   const supportWidth = isWood ? 5 : 4;
-  const supportHeight = baseRadius * 2 * verticalStretch + 5;
   
-  // Draw shadow/outline
+  // Draw main support column at tile center
   ctx.fillStyle = darkColor;
   ctx.beginPath();
-  ctx.moveTo(centerX - supportWidth / 2 + 0.5, centerY + 0.5);
-  ctx.lineTo(centerX - supportWidth / 2 + 0.5, centerY - supportHeight + 0.5);
-  ctx.lineTo(centerX + supportWidth / 2 + 0.5, centerY - supportHeight + 0.5);
-  ctx.lineTo(centerX + supportWidth / 2 + 0.5, centerY + 0.5);
+  ctx.moveTo(tileCenter.x - supportWidth / 2 + 0.5, groundY + 0.5);
+  ctx.lineTo(tileCenter.x - supportWidth / 2 + 0.5, supportTopY + 0.5);
+  ctx.lineTo(tileCenter.x + supportWidth / 2 + 0.5, supportTopY + 0.5);
+  ctx.lineTo(tileCenter.x + supportWidth / 2 + 0.5, groundY + 0.5);
   ctx.closePath();
   ctx.fill();
   
-  // Main column
   ctx.fillStyle = mainColor;
   ctx.beginPath();
-  ctx.moveTo(centerX - supportWidth / 2, centerY);
-  ctx.lineTo(centerX - supportWidth / 2, centerY - supportHeight);
-  ctx.lineTo(centerX + supportWidth / 2, centerY - supportHeight);
-  ctx.lineTo(centerX + supportWidth / 2, centerY);
+  ctx.moveTo(tileCenter.x - supportWidth / 2, groundY);
+  ctx.lineTo(tileCenter.x - supportWidth / 2, supportTopY);
+  ctx.lineTo(tileCenter.x + supportWidth / 2, supportTopY);
+  ctx.lineTo(tileCenter.x + supportWidth / 2, groundY);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = lightColor;
+  ctx.lineWidth = 0.5;
   ctx.stroke();
   
-  // Horizontal braces at different heights
-  // Width varies to follow teardrop contour - wider at bottom, narrower at top
-  const numBraces = isWood ? 5 : 3; // More braces for wood
+  // Horizontal braces
+  const numBraces = isWood ? 5 : 3;
   for (let i = 1; i <= numBraces; i++) {
-    const t = i / (numBraces + 1); // 0 = bottom, 1 = top
-    const braceY = centerY - (supportHeight * t);
-    // Brace width follows loop shape: slightly narrower at top
-    const teardropWidthFactor = 1.0 - t * 0.3; // Reduces to 70% width at top
-    const braceWidth = baseRadius * horizontalScale * (isWood ? 0.6 : 0.5) * teardropWidthFactor;
+    const t = i / (numBraces + 1);
+    const braceY = groundY - supportHeight * t;
+    const braceWidth = loopRadius * (isWood ? 0.5 : 0.4) * (1 - t * 0.3);
     
     ctx.strokeStyle = accentColor;
     ctx.lineWidth = isWood ? 2 : 1.5;
     ctx.beginPath();
-    ctx.moveTo(centerX - braceWidth, braceY);
-    ctx.lineTo(centerX + braceWidth, braceY);
+    ctx.moveTo(tileCenter.x - braceWidth, braceY);
+    ctx.lineTo(tileCenter.x + braceWidth, braceY);
     ctx.stroke();
     
-    // For wood, add diagonal braces
     if (isWood && i < numBraces) {
       const nextT = (i + 1) / (numBraces + 1);
-      const nextBraceY = centerY - (supportHeight * nextT);
-      const nextTeardropWidthFactor = 1.0 - nextT * 0.3;
-      const nextBraceWidth = baseRadius * horizontalScale * 0.6 * nextTeardropWidthFactor;
+      const nextBraceY = groundY - supportHeight * nextT;
+      const nextBraceWidth = loopRadius * 0.5 * (1 - nextT * 0.3);
       ctx.strokeStyle = COLORS.woodAccent;
       ctx.lineWidth = 1.5;
       
-      // X-brace on left side
       ctx.beginPath();
-      ctx.moveTo(centerX - braceWidth, braceY);
-      ctx.lineTo(centerX - supportWidth / 2, nextBraceY);
+      ctx.moveTo(tileCenter.x - braceWidth, braceY);
+      ctx.lineTo(tileCenter.x - supportWidth / 2, nextBraceY);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(centerX - supportWidth / 2, braceY);
-      ctx.lineTo(centerX - nextBraceWidth, nextBraceY);
-      ctx.stroke();
-      
-      // X-brace on right side
-      ctx.beginPath();
-      ctx.moveTo(centerX + braceWidth, braceY);
-      ctx.lineTo(centerX + supportWidth / 2, nextBraceY);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(centerX + supportWidth / 2, braceY);
-      ctx.lineTo(centerX + nextBraceWidth, nextBraceY);
+      ctx.moveTo(tileCenter.x + braceWidth, braceY);
+      ctx.lineTo(tileCenter.x + supportWidth / 2, nextBraceY);
       ctx.stroke();
     }
   }
   
-  // Draw crossties around the full loop
+  // Draw crossties around the loop
   ctx.strokeStyle = COLORS.tie;
   ctx.lineWidth = 2;
   
   for (let i = 0; i < numSegments; i += 2) {
-    const angle = (i / numSegments) * Math.PI * 2;
-    const pt = getLoopPoint(angle);
+    const t = i / numSegments;
+    const pt = getLoopPoint(t);
     
-    // Calculate tangent for perpendicular tie direction
-    const nextAngle = angle + 0.05;
-    const nextPt = getLoopPoint(nextAngle);
+    const nextT = (i + 1) / numSegments;
+    const nextPt = getLoopPoint(nextT);
     const tangentX = nextPt.x - pt.x;
     const tangentY = nextPt.y - pt.y;
     const tangentLen = Math.hypot(tangentX, tangentY);
     
     if (tangentLen > 0.001) {
-      // Perpendicular to tangent in the loop plane
       const tieX = -tangentY / tangentLen;
       const tieY = tangentX / tangentLen;
       
@@ -999,7 +997,7 @@ export function drawLoopTrack(
     }
   }
   
-  // Draw the two rails as complete circles
+  // Draw the two rails
   ctx.strokeStyle = trackColor;
   ctx.lineWidth = RAIL_WIDTH;
   ctx.lineCap = 'round';
@@ -1008,8 +1006,8 @@ export function drawLoopTrack(
     ctx.beginPath();
     
     for (let i = 0; i <= numSegments; i++) {
-      const angle = (i / numSegments) * Math.PI * 2;
-      const pt = getLoopPoint(angle, railSide);
+      const t = i / numSegments;
+      const pt = getLoopPoint(t, railSide);
       
       if (i === 0) {
         ctx.moveTo(pt.x, pt.y);
@@ -1018,7 +1016,6 @@ export function drawLoopTrack(
       }
     }
     
-    ctx.closePath();
     ctx.stroke();
   }
 }

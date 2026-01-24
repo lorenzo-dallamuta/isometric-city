@@ -1770,8 +1770,8 @@ function directionFromDelta(dx: number, dy: number): string | null {
 
 /**
  * Get the actual travel direction for a car at parameter t along a track piece.
- * Uses the ordered track tiles to determine entry/exit directions so cars never
- * face backward on straights or curves.
+ * For curves, calculates the tangent direction of the bezier curve.
+ * For straights, uses the tile delta direction.
  */
 function getCarTravelDirection(
   trackPiece: NonNullable<Tile['trackPiece']>,
@@ -1780,6 +1780,48 @@ function getCarTravelDirection(
   t: number
 ): string {
   const trackLen = trackTiles.length;
+  const { type, direction } = trackPiece;
+  
+  // For curves, calculate travel direction based on curve geometry
+  if (type === 'turn_left_flat' || type === 'turn_right_flat') {
+    const turnRight = type === 'turn_right_flat';
+    
+    // The track's direction field indicates which edge the curve STARTS from
+    // But the car should face the direction it's TRAVELING (opposite of where it came from)
+    const opposite: Record<string, string> = {
+      north: 'south', south: 'north', east: 'west', west: 'east'
+    };
+    
+    // Travel direction when entering the curve (opposite of entry edge)
+    const travelEntryDir = opposite[direction];
+    
+    // Exit direction depends on turn type
+    // For right turn: north entry → east exit, east entry → south exit, etc.
+    // For left turn: north entry → west exit, west entry → south exit, etc.
+    let travelExitDir: string;
+    if (turnRight) {
+      const rightTurn: Record<string, string> = {
+        north: 'east', east: 'south', south: 'west', west: 'north'
+      };
+      travelExitDir = rightTurn[direction];
+    } else {
+      const leftTurn: Record<string, string> = {
+        north: 'west', west: 'south', south: 'east', east: 'north'
+      };
+      travelExitDir = leftTurn[direction];
+    }
+    
+    // Interpolate between entry and exit travel directions based on position on curve
+    if (t < 0.35) {
+      return travelEntryDir;
+    } else if (t > 0.65) {
+      return travelExitDir;
+    } else {
+      return t < 0.5 ? travelEntryDir : travelExitDir;
+    }
+  }
+  
+  // For non-curves, use tile deltas
   if (trackLen < 2) return trackPiece.direction;
 
   const prevTile = trackTiles[(trackIndex - 1 + trackLen) % trackLen];
@@ -1791,9 +1833,10 @@ function getCarTravelDirection(
 
   if (!entryDir || !exitDir) return trackPiece.direction;
 
-  // Straight segments should be constant, curves interpolate by position.
+  // Straight segments: use consistent direction
   if (entryDir === exitDir) return entryDir;
 
+  // For slopes or other track types, interpolate between entry and exit
   if (t < 0.3) return entryDir;
   if (t > 0.7) return exitDir;
   return t < 0.5 ? entryDir : exitDir;

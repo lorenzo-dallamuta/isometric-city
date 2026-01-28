@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useCoaster } from '@/context/CoasterContext';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import { useMobile } from '@/hooks/useMobile';
 import { useCoasterMultiplayerSync } from '@/hooks/useCoasterMultiplayerSync';
+import { useCopyRoomLink } from '@/hooks/useCopyRoomLink';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CoasterGrid } from './CoasterGrid';
 import { Sidebar } from './Sidebar';
@@ -32,18 +33,10 @@ export default function CoasterGame({ onExit }: GameProps) {
   } | null>(null);
   const [navigationTarget, setNavigationTarget] = useState<{ x: number; y: number } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [copiedRoomLink, setCopiedRoomLink] = useState(false);
+  const { copied: copiedRoomLink, handleCopyRoomLink } = useCopyRoomLink(roomCode, 'coaster/coop');
   const { isMobileDevice, isSmallScreen } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
   const hasShownShareModalRef = useRef(false);
-
-  const handleCopyRoomLink = useCallback(() => {
-    if (!roomCode) return;
-    const url = `${window.location.origin}/coaster/coop/${roomCode}`;
-    navigator.clipboard.writeText(url);
-    setCopiedRoomLink(true);
-    setTimeout(() => setCopiedRoomLink(false), 2000);
-  }, [roomCode]);
 
   useEffect(() => {
     if (!isMobile) return;
